@@ -20,7 +20,7 @@ import {
   MoreHorizontal
 } from "lucide-react";
 import ActionMenu from "../../components/ActionMenu";
-import { hitungStatusBbU, hitungStatusTbU, hitungStatusBbTb, hitungIMT } from "../../lib/zScoreCalculator";
+import { hitungStatusBbU, hitungStatusTbU, hitungStatusBbTb, hitungIMT, convertStatusBbUToCode, convertStatusTbUToCode, convertStatusBbTbToCode } from "../../lib/zScoreCalculator";
 import { balitaApi, lansiaApi, periodeApi, Balita, Lansia, PeriodePelayanan } from "../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -87,23 +87,26 @@ function getStatusBadgeStyle(type: 'BBU' | 'TBU' | 'BBTB', status: string) {
   const s = (status || '').toLowerCase();
   
   if (type === 'BBU') {
-    if (s.includes('sangat kurang') || s === 'sk') return 'bg-red-100 text-red-800 border-red-300 font-extrabold';
-    if (s.includes('kurang') || s === 'k') return 'bg-red-50 text-red-700 border-red-200 font-bold';
-    if (s.includes('lebih') || s === 'l') return 'bg-amber-50 text-amber-800 border-amber-200 font-bold';
+    // BB/U: Sangat Kurang | Kurang | Normal | Lebih
+    if (s.includes('sangat kurang')) return 'bg-red-100 text-red-800 border-red-300 font-extrabold';
+    if (s.includes('kurang')) return 'bg-orange-100 text-orange-800 border-orange-300 font-bold';
+    if (s.includes('lebih')) return 'bg-amber-50 text-amber-800 border-amber-200 font-bold';
     return 'bg-emerald-50 text-emerald-800 border-emerald-200 font-bold';
   }
   
   if (type === 'TBU') {
-    if (s.includes('sangat pendek') || s === 'sp') return 'bg-red-100 text-red-800 border-red-300 font-extrabold';
-    if (s.includes('pendek') || s === 'p') return 'bg-red-50 text-red-700 border-red-200 font-bold';
-    if (s.includes('tinggi') || s === 't') return 'bg-teal-50 text-teal-800 border-teal-200 font-bold';
+    // TB/U: Sangat Pendek | Pendek | Normal | Tinggi
+    if (s.includes('sangat pendek')) return 'bg-red-100 text-red-800 border-red-300 font-extrabold';
+    if (s.includes('pendek')) return 'bg-orange-100 text-orange-800 border-orange-300 font-bold';
+    if (s.includes('tinggi')) return 'bg-teal-50 text-teal-800 border-teal-200 font-bold';
     return 'bg-emerald-50 text-emerald-800 border-emerald-200 font-bold';
   }
 
   if (type === 'BBTB') {
-    if (s.includes('sangat kurus') || s === 'sk') return 'bg-red-100 text-red-800 border-red-300 font-extrabold';
-    if (s.includes('kurus') || s === 'k') return 'bg-red-50 text-red-700 border-red-200 font-bold';
-    if (s.includes('gemuk') || s.includes('obesitas') || s === 'g') return 'bg-amber-50 text-amber-800 border-amber-200 font-bold';
+    // BB/TB: Sangat Kurus | Kurus | Normal | Gemuk
+    if (s.includes('sangat kurus')) return 'bg-red-100 text-red-800 border-red-300 font-extrabold';
+    if (s.includes('kurus')) return 'bg-orange-100 text-orange-800 border-orange-300 font-bold';
+    if (s.includes('gemuk')) return 'bg-amber-50 text-amber-800 border-amber-200 font-bold';
     return 'bg-emerald-50 text-emerald-800 border-emerald-200 font-bold';
   }
 
@@ -632,28 +635,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
     }
   };
 
-  // Helper mapping status enum for API
-  function mapStatusBbU(s: string): 'SK' | 'K' | 'N' | 'L' {
-    if (s === 'Sangat Kurang' || s === 'SK') return 'SK';
-    if (s === 'Kurang' || s === 'K') return 'K';
-    if (s === 'Lebih' || s === 'L' || s === 'Risiko Lebih') return 'L';
-    return 'N';
-  }
-
-  function mapStatusTbU(s: string): 'SP' | 'P' | 'N' | 'T' {
-    if (s === 'Sangat Pendek' || s === 'SP') return 'SP';
-    if (s === 'Pendek' || s === 'P') return 'P';
-    if (s === 'Tinggi' || s === 'T') return 'T';
-    return 'N';
-  }
-
-  function mapStatusBbTb(s: string): 'SK' | 'K' | 'N' | 'G' {
-    if (s === 'Sangat Kurus' || s === 'SK') return 'SK';
-    if (s === 'Kurus' || s === 'K') return 'K';
-    if (s === 'Gemuk' || s === 'G' || s === 'Obesitas') return 'G';
-    return 'N';
-  }
-
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -693,9 +674,9 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
           tinggiBadan: tb,
           lingkarKepala: lk,
           lingkarLengan: lila,
-          statusBbU: mapStatusBbU(examBBU),
-          statusTbU: mapStatusTbU(examTBU),
-          statusBbTb: mapStatusBbTb(examBBTB),
+          statusBbU: convertStatusBbUToCode(examBBU as any),
+          statusTbU: convertStatusTbUToCode(examTBU as any),
+          statusBbTb: convertStatusBbTbToCode(examBBTB as any),
           statusKms: examKms || "N",
           vitaminA: examVitA,
           vitB1: examVitB1,
@@ -1400,20 +1381,27 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
                             <h4 className="text-xs font-extrabold text-teal-900 uppercase tracking-wider">Status Gizi</h4>
                             <span className="text-[10px] text-teal-600 font-semibold">(otomatis)</span>
                           </div>
-                          <div className="space-y-2 text-xs">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-saas-muted">BB/U:</span>
-                              <span className={`px-2.5 py-1 rounded border ${getStatusBadgeStyle('BBU', examBBU)}`}>{examBBU}</span>
+                          {!examBB || !examTB || parseFloat(examBB) <= 0 || parseFloat(examTB) <= 0 ? (
+                            <div className="flex flex-col items-center justify-center py-4 text-center space-y-1">
+                              <p className="text-xs text-gray-400 font-semibold">Menunggu pengukuran</p>
+                              <p className="text-[10px] text-gray-400">Isi BB dan TB untuk menghitung status gizi</p>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-saas-muted">TB/U:</span>
-                              <span className={`px-2.5 py-1 rounded border ${getStatusBadgeStyle('TBU', examTBU)}`}>{examTBU}</span>
+                          ) : (
+                            <div className="space-y-2 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-saas-muted">BB/U:</span>
+                                <span className={`px-2.5 py-1 rounded border text-[11px] ${getStatusBadgeStyle('BBU', examBBU)}`}>{examBBU}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-saas-muted">TB/U:</span>
+                                <span className={`px-2.5 py-1 rounded border text-[11px] ${getStatusBadgeStyle('TBU', examTBU)}`}>{examTBU}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-saas-muted">BB/TB:</span>
+                                <span className={`px-2.5 py-1 rounded border text-[11px] ${getStatusBadgeStyle('BBTB', examBBTB)}`}>{examBBTB}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-saas-muted">BB/TB:</span>
-                              <span className={`px-2.5 py-1 rounded border ${getStatusBadgeStyle('BBTB', examBBTB)}`}>{examBBTB}</span>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </div>
 

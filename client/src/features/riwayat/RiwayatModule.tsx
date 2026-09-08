@@ -17,13 +17,11 @@ import {
 } from "../../lib/zScoreCalculator";
 import {
   Search,
-  Download,
   Heart,
   CheckCircle2,
   AlertCircle,
   Clock,
   Calendar,
-  Loader2,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -57,8 +55,6 @@ interface RiwayatModuleProps {
 export default function RiwayatModule({ posyanduId, activePeriode, onNavigate }: RiwayatModuleProps) {
   const [logs, setLogs] = useState<ItemRiwayat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"semua" | "Balita" | "Lansia">("semua");
   const [statusFilter, setStatusFilter] = useState<"semua" | "success" | "warning">("semua");
@@ -302,42 +298,6 @@ export default function RiwayatModule({ posyanduId, activePeriode, onNavigate }:
     return () => window.removeEventListener("pemeriksaanSaved", handlePemeriksaanSaved);
   }, []);
 
-  // Handler Export Excel
-  const handleExport = async () => {
-    try {
-      setExporting(true);
-      await riwayatApi.downloadExcel(posyanduId, {
-        tipe: typeFilter,
-        search: query,
-        status: statusFilter,
-        bulan: selectedBulan === "semua" ? undefined : String(selectedBulan),
-        tahun: selectedTahun === "semua" ? undefined : String(selectedTahun),
-      });
-    } catch (err) {
-      console.error("Gagal export excel:", err);
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Handler Export PDF
-  const handleExportPdf = async () => {
-    try {
-      setExportingPdf(true);
-      await riwayatApi.downloadPdf(posyanduId, {
-        tipe: typeFilter,
-        search: query,
-        status: statusFilter,
-        bulan: selectedBulan === "semua" ? undefined : String(selectedBulan),
-        tahun: selectedTahun === "semua" ? undefined : String(selectedTahun),
-      });
-    } catch (err) {
-      console.error("Gagal export PDF:", err);
-    } finally {
-      setExportingPdf(false);
-    }
-  };
-
   // Olah data untuk Grafik Trend Pertumbuhan / Pemeriksaan (Agregasi Tanggal Global)
   const chartData = (() => {
     const dateMap: Record<string, { tanggal: string; balita: number; lansia: number; warning: number }> = {};
@@ -417,32 +377,6 @@ export default function RiwayatModule({ posyanduId, activePeriode, onNavigate }:
               <LineChartIcon className="w-3.5 h-3.5 shrink-0" /> Grafik Trend
             </button>
           </div>
-
-          <button
-            onClick={handleExportPdf}
-            disabled={exportingPdf}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-input shadow-md shadow-red-600/10 transition-all disabled:opacity-50 whitespace-nowrap"
-          >
-            {exportingPdf ? (
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-            ) : (
-              <Download className="w-4 h-4 shrink-0" />
-            )}
-            Cetak PDF (.pdf)
-          </button>
-
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 bg-saas-primary hover:bg-teal-600 text-white text-xs font-bold rounded-input shadow-md shadow-teal-500/10 transition-all disabled:opacity-50 whitespace-nowrap"
-          >
-            {exporting ? (
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-            ) : (
-              <Download className="w-4 h-4 shrink-0" />
-            )}
-            Export Excel (.xlsx)
-          </button>
         </div>
       </div>
 
