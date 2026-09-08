@@ -1436,33 +1436,16 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
                         </div>
                       </div>
 
-                      {/* Status KMS & Imunisasi Opsional */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-saas-muted">Status KMS</label>
-                          <select
-                            value={examKms}
-                            onChange={(e) => setExamKms(e.target.value)}
-                            className="w-full p-2.5 bg-gray-50 border border-gray-150 rounded-input text-xs font-semibold focus:outline-none focus:border-saas-primary/50"
-                          >
-                            <option value="N">N (Berat Naik)</option>
-                            <option value="T">T (Berat Tetap/Turun)</option>
-                            <option value="2T">2T (2x Tidak Naik)</option>
-                            <option value="B">B (Baru Pertama Kali)</option>
-                            <option value="O">O (Bulan Lalu Absen)</option>
-                          </select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-saas-muted">Status Imunisasi</label>
-                          <input
-                            type="text"
-                            placeholder="Contoh: BCG, Polio 1"
-                            value={examImunisasi}
-                            onChange={(e) => setExamImunisasi(e.target.value)}
-                            className="w-full p-2.5 bg-gray-50 border border-gray-150 rounded-input text-xs font-semibold focus:outline-none focus:border-saas-primary/50"
-                          />
-                        </div>
+                      {/* Status Imunisasi Opsional */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-saas-muted">Status Imunisasi</label>
+                        <input
+                          type="text"
+                          placeholder="Contoh: BCG, Polio 1"
+                          value={examImunisasi}
+                          onChange={(e) => setExamImunisasi(e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 border border-gray-150 rounded-input text-xs font-semibold focus:outline-none focus:border-saas-primary/50"
+                        />
                       </div>
 
                       {/* ASI Eksklusif */}

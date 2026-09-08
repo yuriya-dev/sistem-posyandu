@@ -1274,7 +1274,7 @@ export default function DashboardModule({ searchQuery, onNavigate, posyanduId, a
                 {/* Balita Specific Inputs */}
                 {selectedPasien.tipe === "Balita" && (
                   <div className="space-y-4 border-t border-gray-50 pt-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {/* Lingkar Kepala */}
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-saas-muted uppercase">Lingkar Kepala (cm)</label>
@@ -1303,22 +1303,6 @@ export default function DashboardModule({ searchQuery, onNavigate, posyanduId, a
                           onChange={(e) => setExamLiLA(e.target.value.replace(/-/g, ""))}
                           className="w-full p-2 bg-gray-50 border border-gray-150 rounded-lg text-xs font-semibold focus:outline-none focus:border-saas-primary/50"
                         />
-                      </div>
-
-                      {/* Status KMS */}
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-saas-muted uppercase">Indikator KMS</label>
-                        <select
-                          value={examKms}
-                          onChange={(e) => setExamKms(e.target.value)}
-                          className="w-full p-2 bg-gray-50 border border-gray-150 rounded-lg text-xs font-semibold focus:outline-none focus:border-saas-primary/50"
-                        >
-                          <option value="N">N (Berat Naik)</option>
-                          <option value="T">T (Berat Tetap/Turun)</option>
-                          <option value="2T">2T (2x Tidak Naik)</option>
-                          <option value="B">B (Baru Pertama Kali)</option>
-                          <option value="O">O (Bulan Lalu Absen)</option>
-                        </select>
                       </div>
 
                       {/* Status Imunisasi */}
