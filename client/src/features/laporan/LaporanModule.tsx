@@ -95,10 +95,12 @@ export default function LaporanModule({ posyanduId, onNavigate }: LaporanModuleP
   const handleExportPdf = async () => {
     try {
       setExportingPdf(true);
+      const activeSearch = filterCategory === "Balita" ? searchBalita : searchLansia;
       await riwayatApi.downloadPdf(posyanduId, {
         tipe: filterCategory,
         bulan: filterMonth || undefined,
         tahun: filterYear || undefined,
+        search: activeSearch || undefined,
       });
     } catch (err) {
       console.error("Gagal export PDF:", err);
@@ -111,10 +113,12 @@ export default function LaporanModule({ posyanduId, onNavigate }: LaporanModuleP
   const handleExportExcel = async () => {
     try {
       setExportingExcel(true);
+      const activeSearch = filterCategory === "Balita" ? searchBalita : searchLansia;
       await riwayatApi.downloadExcel(posyanduId, {
         tipe: filterCategory,
         bulan: filterMonth || undefined,
         tahun: filterYear || undefined,
+        search: activeSearch || undefined,
       });
     } catch (err) {
       console.error("Gagal export Excel:", err);
