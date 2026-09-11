@@ -2,6 +2,7 @@ import 'dotenv/config';
 import app from './app';
 import prisma from './shared/config/prisma';
 import { initEmailWorker } from './jobs/emailWorker';
+import { closeRedis } from './shared/config/redis';
 
 const PORT = process.env.PORT || 5001;
 
@@ -24,12 +25,14 @@ async function main() {
 process.on('SIGTERM', async () => {
   console.log('SIGTERM diterima, menutup server...');
   await prisma.$disconnect();
+  await closeRedis();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('SIGINT diterima, menutup server...');
   await prisma.$disconnect();
+  await closeRedis();
   process.exit(0);
 });
 

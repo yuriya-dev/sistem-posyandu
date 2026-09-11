@@ -308,195 +308,758 @@ export const riwayatService = {
     workbook.creator = 'Sistem Informasi Posyandu';
     workbook.created = new Date();
 
+    const rawDesa = (posyandu.desa || 'WATULAWANG').trim();
+    const cleanDesa = rawDesa.replace(/^DESA\s+/i, '').trim();
+
+    const rawKec = (posyandu.kecamatan || 'PEJAGOAN').trim();
+    const cleanKec = rawKec.replace(/^(PUSKESMAS|KECAMATAN)\s+/i, '').trim();
+
+    const tahunVal = filter.tahun || new Date().getFullYear();
+    const rawPosName = posyandu.nama.toUpperCase().replace(/^POSYANDU\s+/i, '').trim();
+    const desaKecStr = `DESA ${cleanDesa.toUpperCase()} KECAMATAN ${cleanKec.toUpperCase()}`;
+    const tahunStr = `TAHUN ${tahunVal}`;
+    const todayFormatted = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
     // Subtitle Filter untuk Excel Header
     const filterInfoArr = [];
-    if (filter.tipe && filter.tipe !== 'semua') filterInfoArr.push(`Kategori: ${filter.tipe}`);
     if (filter.bulan) filterInfoArr.push(`Bulan: ${NAMA_BULAN[filter.bulan - 1]}`);
     if (filter.tahun) filterInfoArr.push(`Tahun: ${filter.tahun}`);
     if (filter.status && filter.status !== 'semua') filterInfoArr.push(`Status: ${filter.status === 'warning' ? 'Perlu Perhatian' : 'Normal'}`);
     if (filter.search) filterInfoArr.push(`Pencarian: "${filter.search}"`);
-    
-    const filterInfoStr = filterInfoArr.length > 0 ? ` [Filter: ${filterInfoArr.join(' | ')}]` : '';
 
-    // Helper untuk membuat worksheet dengan format Landscape & Kolom Mandiri
+    const subTitleStr = filterInfoArr.length > 0
+      ? `Filter Aktif: ${filterInfoArr.join(' | ')}   •   Tanggal Cetak: ${todayFormatted}`
+      : `Tanggal Cetak Laporan: ${todayFormatted}`;
+
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    };
+
+    const applyBordersToRange = (
+      sheet: ExcelJS.Worksheet,
+      startRow: number,
+      startCol: number,
+      endRow: number,
+      endCol: number,
+      border: Partial<ExcelJS.Borders>
+    ) => {
+      for (let r = startRow; r <= endRow; r++) {
+        for (let c = startCol; c <= endCol; c++) {
+          sheet.getCell(r, c).border = border;
+        }
+      }
+    };
+
+    const styleHeaderCell = (
+      cell: ExcelJS.Cell,
+      bgColorArgb: string,
+      borderColorArgb: string,
+      fontSize = 8.5
+    ) => {
+      cell.font = { name: 'Arial', size: fontSize, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColorArgb } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin', color: { argb: borderColorArgb } },
+        left: { style: 'thin', color: { argb: borderColorArgb } },
+        bottom: { style: 'thin', color: { argb: borderColorArgb } },
+        right: { style: 'thin', color: { argb: borderColorArgb } },
+      };
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // WORKSHEET BALITA (PERSIS DENGAN FORMAT REGISTER PDF)
+    // ─────────────────────────────────────────────────────────────
     const createBalitaWorksheet = (sheetName: string, items: ItemRiwayat[]) => {
       const sheet = workbook.addWorksheet(sheetName, {
         pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
       });
+      sheet.views = [{ showGridLines: true }];
 
-      // Header Judul Laporan
-      sheet.mergeCells('A1:T1');
-      sheet.getCell('A1').value = `LAPORAN PEMERIKSAAN BALITA${filterInfoStr}`;
-      sheet.getCell('A1').font = { name: 'Arial', size: 14, bold: true };
-      sheet.getCell('A1').alignment = { horizontal: 'center' };
+      // Kop Surat Resmi (Persis PDF)
+      sheet.mergeCells('A1:AC1');
+      sheet.getCell('A1').value = `REGISTER POSYANDU BALITA ${rawPosName}`;
+      sheet.getCell('A1').font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF0F172A' } };
+      sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(1).height = 22;
 
-      sheet.mergeCells('A2:T2');
-      sheet.getCell('A2').value = `Posyandu: ${posyandu?.nama || '-'} | Desa: ${posyandu?.desa || '-'} | Kecamatan: ${posyandu?.kecamatan || '-'}`;
-      sheet.getCell('A2').font = { name: 'Arial', size: 10, italic: true };
-      sheet.getCell('A2').alignment = { horizontal: 'center' };
+      sheet.mergeCells('A2:AC2');
+      sheet.getCell('A2').value = desaKecStr;
+      sheet.getCell('A2').font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E293B' } };
+      sheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(2).height = 18;
 
-      sheet.addRow([]);
+      sheet.mergeCells('A3:AC3');
+      sheet.getCell('A3').value = tahunStr;
+      sheet.getCell('A3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF334155' } };
+      sheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(3).height = 16;
 
-      const headerRow = sheet.addRow([
-        'No',
-        'Nama Balita',
-        'Tanggal Lahir',
-        'NIK',
-        'Nama Ibu',
-        'JK',
-        'Usia',
-        'BB (kg)',
-        'TB (cm)',
-        'BB/U',
-        'TB/U',
-        'BB/TB',
-        'LK (cm)',
-        'LiLA (cm)',
-        'B1',
-        'B6',
-        'ASI SKS',
-        'Vitamin A',
-        'Obat Cacing',
-        'Pemberian Lain'
-      ]);
+      sheet.mergeCells('A4:AC4');
+      sheet.getCell('A4').value = subTitleStr;
+      sheet.getCell('A4').font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF64748B' } };
+      sheet.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(4).height = 16;
 
-      headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 };
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: '0D9488' },
-        };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      });
+      sheet.getRow(5).height = 10;
 
-      items.forEach((item, index) => {
-        const usiaText = getUsiaText(item.tanggalLahir, item.tanggal, item.tipe);
-        const row = sheet.addRow([
-          index + 1,
-          item.nama,
-          item.tanggalLahir || '-',
-          item.nik || '-',
-          item.namaIbu || '-',
-          item.jenisKelamin || '-',
-          usiaText,
-          item.beratBadan ?? '-',
-          item.tinggiBadan ?? '-',
-          getStatusBbUText(item.statusBbU),
-          getStatusTbUText(item.statusTbU),
-          getStatusBbTbText(item.statusBbTb),
-          item.lingkarKepala ?? '-',
-          item.lingkarLengan ?? '-',
-          item.vitB1 ? 'Ya' : 'Tdk',
-          item.vitB6 ? 'Ya' : 'Tdk',
-          item.asiEksklusif ? 'Ya' : 'Tdk',
-          item.vitaminA ? 'Ya' : 'Tdk',
-          item.obatCacing ? 'Ya' : 'Tdk',
-          extractPemberianLain(item.statusImunisasi)
-        ]);
+      // Header Bertingkat (Baris 6, 7, 8)
+      // Style semua sel di range header terlebih dahulu
+      for (let r = 6; r <= 8; r++) {
+        sheet.getRow(r).height = 20;
+        for (let c = 1; c <= 29; c++) {
+          styleHeaderCell(sheet.getCell(r, c), 'FF0F766E', 'FF0D9488', 8);
+        }
+      }
 
-        row.eachCell((cell, colNum) => {
-          if (colNum === 1 || colNum === 3 || colNum === 4 || colNum === 6 || colNum === 7 || colNum >= 10) {
-            cell.alignment = { horizontal: 'center' };
-          } else if (colNum === 8 || colNum === 9) {
-            cell.alignment = { horizontal: 'right' };
-          } else {
-            cell.alignment = { horizontal: 'left' };
+      // Baris 6 (Header Group Level 1)
+      sheet.getCell('A6').value = 'NO';
+      sheet.getCell('B6').value = 'INFORMASI BALITA';
+      sheet.getCell('H6').value = 'PENGUKURAN';
+      sheet.getCell('J6').value = 'STATUS GIZI';
+      sheet.getCell('V6').value = 'PELAYANAN YANG DIBERIKAN';
+      sheet.getCell('AB6').value = 'FISIK';
+
+      // Baris 7 (Header Sub-Kolom Level 2)
+      sheet.getCell('B7').value = 'Nama Balita';
+      sheet.getCell('C7').value = 'Tgl Lahir';
+      sheet.getCell('D7').value = 'NIK';
+      sheet.getCell('E7').value = 'Nama Ibu';
+      sheet.getCell('F7').value = 'JK';
+      sheet.getCell('G7').value = 'Usia';
+      sheet.getCell('H7').value = 'BB (kg)';
+      sheet.getCell('I7').value = 'TB (cm)';
+      sheet.getCell('J7').value = 'BB/U';
+      sheet.getCell('N7').value = 'TB/U';
+      sheet.getCell('R7').value = 'BB/TB';
+      sheet.getCell('V7').value = 'B1';
+      sheet.getCell('W7').value = 'B6';
+      sheet.getCell('X7').value = 'ASI';
+      sheet.getCell('Y7').value = 'Vit A';
+      sheet.getCell('Z7').value = 'Cacing';
+      sheet.getCell('AA7').value = 'Pemberian Lain';
+      sheet.getCell('AB7').value = 'LK (cm)';
+      sheet.getCell('AC7').value = 'LiLA';
+
+      // Baris 8 (Header Sub-Kolom Level 3 - Status Gizi)
+      sheet.getCell('J8').value = 'SK';
+      sheet.getCell('K8').value = 'K';
+      sheet.getCell('L8').value = 'N';
+      sheet.getCell('M8').value = 'L';
+      sheet.getCell('N8').value = 'SP';
+      sheet.getCell('O8').value = 'P';
+      sheet.getCell('P8').value = 'N';
+      sheet.getCell('Q8').value = 'T';
+      sheet.getCell('R8').value = 'SK';
+      sheet.getCell('S8').value = 'K';
+      sheet.getCell('T8').value = 'N';
+      sheet.getCell('U8').value = 'G';
+
+      // Penggabungan Sel (Merges)
+      sheet.mergeCells('A6:A8');
+      sheet.mergeCells('B6:G6');
+      sheet.mergeCells('H6:I6');
+      sheet.mergeCells('J6:U6');
+      sheet.mergeCells('V6:AA6');
+      sheet.mergeCells('AB6:AC6');
+
+      sheet.mergeCells('B7:B8');
+      sheet.mergeCells('C7:C8');
+      sheet.mergeCells('D7:D8');
+      sheet.mergeCells('E7:E8');
+      sheet.mergeCells('F7:F8');
+      sheet.mergeCells('G7:G8');
+      sheet.mergeCells('H7:H8');
+      sheet.mergeCells('I7:I8');
+      sheet.mergeCells('J7:M7');
+      sheet.mergeCells('N7:Q7');
+      sheet.mergeCells('R7:U7');
+      sheet.mergeCells('V7:V8');
+      sheet.mergeCells('W7:W8');
+      sheet.mergeCells('X7:X8');
+      sheet.mergeCells('Y7:Y8');
+      sheet.mergeCells('Z7:Z8');
+      sheet.mergeCells('AA7:AA8');
+      sheet.mergeCells('AB7:AB8');
+      sheet.mergeCells('AC7:AC8');
+
+      // Isi Baris Data Balita
+      let currentRow = 9;
+      if (items.length === 0) {
+        sheet.mergeCells(`A${currentRow}:AC${currentRow}`);
+        const emptyCell = sheet.getCell(`A${currentRow}`);
+        emptyCell.value = 'Tidak ada data pemeriksaan balita pada periode ini';
+        emptyCell.font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF64748B' } };
+        emptyCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        sheet.getRow(currentRow).height = 24;
+        applyBordersToRange(sheet, currentRow, 1, currentRow, 29, thinBorder);
+        currentRow++;
+      } else {
+        items.forEach((item, idx) => {
+          let ageMonths = item.usiaBulan;
+          if (ageMonths === undefined && item.tanggalLahir) {
+            const tL = new Date(item.tanggalLahir);
+            const tP = new Date(item.tanggal);
+            ageMonths = (tP.getFullYear() - tL.getFullYear()) * 12 + (tP.getMonth() - tL.getMonth());
+            if (tP.getDate() < tL.getDate()) ageMonths--;
+            if (ageMonths < 0) ageMonths = 0;
           }
-        });
-      });
+          const usiaStr = ageMonths !== undefined ? `${ageMonths} bln` : '-';
 
-      if (sheet.columns) {
-        (sheet.columns as Array<Partial<ExcelJS.Column>>).forEach((column) => {
-          let maxLength = 0;
-          if (column && typeof column.eachCell === 'function') {
-            column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
-              const columnLength = cell.value ? cell.value.toString().length : 10;
-              if (columnLength > maxLength) {
-                maxLength = columnLength;
-              }
-            });
+          const rowData = [
+            idx + 1,
+            item.nama || '-',
+            item.tanggalLahir ? item.tanggalLahir.substring(0, 10) : '-',
+            item.nik || '-',
+            item.namaIbu || '-',
+            item.jenisKelamin || '-',
+            usiaStr,
+            item.beratBadan !== undefined ? item.beratBadan : '-',
+            item.tinggiBadan !== undefined ? item.tinggiBadan : '-',
+            item.statusBbU === 'SK' ? '✓' : '-',
+            item.statusBbU === 'K' ? '✓' : '-',
+            item.statusBbU === 'N' ? '✓' : '-',
+            item.statusBbU === 'L' ? '✓' : '-',
+            item.statusTbU === 'SP' ? '✓' : '-',
+            item.statusTbU === 'P' ? '✓' : '-',
+            item.statusTbU === 'N' ? '✓' : '-',
+            item.statusTbU === 'T' ? '✓' : '-',
+            item.statusBbTb === 'SK' ? '✓' : '-',
+            item.statusBbTb === 'K' ? '✓' : '-',
+            item.statusBbTb === 'N' ? '✓' : '-',
+            item.statusBbTb === 'G' ? '✓' : '-',
+            item.vitB1 ? '✓' : '-',
+            item.vitB6 ? '✓' : '-',
+            item.asiEksklusif ? '✓' : '-',
+            item.vitaminA ? '✓' : '-',
+            item.obatCacing ? '✓' : '-',
+            extractPemberianLain(item.statusImunisasi),
+            item.lingkarKepala !== undefined ? item.lingkarKepala : '-',
+            item.lingkarLengan !== undefined ? item.lingkarLengan : '-'
+          ];
+
+          const row = sheet.getRow(currentRow);
+          row.values = rowData;
+          row.height = 20;
+
+          const isEven = idx % 2 === 0;
+          const bgArgb = isEven ? 'FFF8FAFC' : 'FFFFFFFF';
+
+          for (let c = 1; c <= 29; c++) {
+            const cell = sheet.getCell(currentRow, c);
+            cell.font = { name: 'Arial', size: 8.5, bold: c === 2 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+            cell.border = thinBorder;
+
+            if (c === 2 || c === 5) {
+              cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            } else {
+              cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            }
           }
-          column.width = Math.max(maxLength + 3, 10);
+
+          currentRow++;
         });
       }
+
+      // Lebar Kolom
+      const balitaColWidths = [
+        6,   // 1: No
+        24,  // 2: Nama Balita
+        13,  // 3: Tgl Lahir
+        18,  // 4: NIK
+        20,  // 5: Nama Ibu
+        6,   // 6: JK
+        10,  // 7: Usia
+        9,   // 8: BB (kg)
+        9,   // 9: TB (cm)
+        5,   // 10: BB/U SK
+        5,   // 11: BB/U K
+        5,   // 12: BB/U N
+        5,   // 13: BB/U L
+        5,   // 14: TB/U SP
+        5,   // 15: TB/U P
+        5,   // 16: TB/U N
+        5,   // 17: TB/U T
+        5,   // 18: BB/TB SK
+        5,   // 19: BB/TB K
+        5,   // 20: BB/TB N
+        5,   // 21: BB/TB G
+        6,   // 22: B1
+        6,   // 23: B6
+        7,   // 24: ASI
+        8,   // 25: Vit A
+        9,   // 26: Cacing
+        22,  // 27: Pemberian Lain
+        9,   // 28: LK (cm)
+        9    // 29: LiLA
+      ];
+
+      balitaColWidths.forEach((w, i) => {
+        sheet.getColumn(i + 1).width = w;
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // SUMMARY BOX LENGKAP BALITA (PERSIS FORMAT PDF)
+      // ─────────────────────────────────────────────────────────────
+      const getAgeInfo = (item: ItemRiwayat) => {
+        let m = item.usiaBulan;
+        if (m === undefined && item.tanggalLahir) {
+          const tL = new Date(item.tanggalLahir);
+          const tP = new Date(item.tanggal);
+          m = (tP.getFullYear() - tL.getFullYear()) * 12 + (tP.getMonth() - tL.getMonth());
+          if (tP.getDate() < tL.getDate()) m--;
+          if (m < 0) m = 0;
+        }
+        const months = m ?? 0;
+        return { months };
+      };
+
+      const age0_6 = items.filter(i => getAgeInfo(i).months >= 0 && getAgeInfo(i).months <= 6).length;
+      const age7_12 = items.filter(i => getAgeInfo(i).months >= 7 && getAgeInfo(i).months <= 12).length;
+      const age13_24 = items.filter(i => getAgeInfo(i).months >= 13 && getAgeInfo(i).months <= 24).length;
+      const age25_60 = items.filter(i => getAgeInfo(i).months >= 25 && getAgeInfo(i).months <= 60).length;
+
+      const bbUNormal = items.filter(i => i.statusBbU === 'N').length;
+      const bbUKurang = items.filter(i => i.statusBbU === 'K').length;
+      const bbUSgKurang = items.filter(i => i.statusBbU === 'SK').length;
+      const tbUPendek = items.filter(i => i.statusTbU === 'P' || i.statusTbU === 'SP').length;
+
+      const vitACount = items.filter(i => i.vitaminA).length;
+      const asiCount = items.filter(i => i.asiEksklusif).length;
+      const obatCacingCount = items.filter(i => i.obatCacing).length;
+      const pemberianLainCount = items.filter(i => i.statusImunisasi && i.statusImunisasi.trim() !== '').length;
+
+      const sRow = currentRow + 1;
+
+      // Background Box Summary
+      for (let r = sRow; r <= sRow + 5; r++) {
+        sheet.getRow(r).height = 18;
+        for (let c = 1; c <= 29; c++) {
+          const cell = sheet.getCell(r, c);
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+        }
+      }
+
+      // Title Summary
+      sheet.mergeCells(`A${sRow}:AC${sRow}`);
+      const sumTitleCell = sheet.getCell(`A${sRow}`);
+      sumTitleCell.value = 'SUMMARY KELOMPOK UMUR & REKAPITULASI PEMERIKSAAN POSYANDU';
+      sumTitleCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF065F46' } };
+      sumTitleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      sheet.getRow(sRow).height = 22;
+
+      // Group Subtitles
+      sheet.mergeCells(`B${sRow + 1}:H${sRow + 1}`);
+      const g1 = sheet.getCell(`B${sRow + 1}`);
+      g1.value = 'Rentang Umur Balita:';
+      g1.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+
+      sheet.mergeCells(`J${sRow + 1}:P${sRow + 1}`);
+      const g2 = sheet.getCell(`J${sRow + 1}`);
+      g2.value = 'Status Gizi & Perkembangan:';
+      g2.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+
+      sheet.mergeCells(`V${sRow + 1}:AA${sRow + 1}`);
+      const g3 = sheet.getCell(`V${sRow + 1}`);
+      g3.value = 'Intervensi & Pemberian Lain:';
+      g3.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+
+      // Row 1 Values
+      sheet.mergeCells(`B${sRow + 2}:D${sRow + 2}`);
+      sheet.getCell(`B${sRow + 2}`).value = '• 0 - 6 Bulan';
+      sheet.mergeCells(`E${sRow + 2}:H${sRow + 2}`);
+      sheet.getCell(`E${sRow + 2}`).value = `:  ${age0_6} Anak`;
+
+      sheet.mergeCells(`J${sRow + 2}:M${sRow + 2}`);
+      sheet.getCell(`J${sRow + 2}`).value = '• BB/U Normal';
+      sheet.mergeCells(`N${sRow + 2}:S${sRow + 2}`);
+      sheet.getCell(`N${sRow + 2}`).value = `:  ${bbUNormal} Anak`;
+
+      sheet.mergeCells(`V${sRow + 2}:X${sRow + 2}`);
+      sheet.getCell(`V${sRow + 2}`).value = '• Vit A / ASI SKS / Obat Cacing';
+      sheet.mergeCells(`Y${sRow + 2}:AC${sRow + 2}`);
+      sheet.getCell(`Y${sRow + 2}`).value = `:  VitA(${vitACount}) | ASI(${asiCount}) | Cacing(${obatCacingCount})`;
+
+      // Row 2 Values
+      sheet.mergeCells(`B${sRow + 3}:D${sRow + 3}`);
+      sheet.getCell(`B${sRow + 3}`).value = '• 7 - 12 Bulan';
+      sheet.mergeCells(`E${sRow + 3}:H${sRow + 3}`);
+      sheet.getCell(`E${sRow + 3}`).value = `:  ${age7_12} Anak`;
+
+      sheet.mergeCells(`J${sRow + 3}:M${sRow + 3}`);
+      sheet.getCell(`J${sRow + 3}`).value = '• BB/U Kurang / Sangat Kurang';
+      sheet.mergeCells(`N${sRow + 3}:S${sRow + 3}`);
+      sheet.getCell(`N${sRow + 3}`).value = `:  ${bbUKurang} Kurang / ${bbUSgKurang} S.Kurang`;
+
+      sheet.mergeCells(`V${sRow + 3}:X${sRow + 3}`);
+      sheet.getCell(`V${sRow + 3}`).value = '• Pemberian Lain / Imunisasi';
+      sheet.mergeCells(`Y${sRow + 3}:AC${sRow + 3}`);
+      sheet.getCell(`Y${sRow + 3}`).value = `:  ${pemberianLainCount} Balita`;
+
+      // Row 3 Values
+      sheet.mergeCells(`B${sRow + 4}:D${sRow + 4}`);
+      sheet.getCell(`B${sRow + 4}`).value = '• 13 - 24 Bulan';
+      sheet.mergeCells(`E${sRow + 4}:H${sRow + 4}`);
+      sheet.getCell(`E${sRow + 4}`).value = `:  ${age13_24} Anak`;
+
+      sheet.mergeCells(`J${sRow + 4}:M${sRow + 4}`);
+      sheet.getCell(`J${sRow + 4}`).value = '• TB/U Stunting (P / SP)';
+      sheet.mergeCells(`N${sRow + 4}:S${sRow + 4}`);
+      sheet.getCell(`N${sRow + 4}`).value = `:  ${tbUPendek} Anak`;
+
+      // Row 4 Values
+      sheet.mergeCells(`B${sRow + 5}:D${sRow + 5}`);
+      sheet.getCell(`B${sRow + 5}`).value = '• 25 - 60 Bulan';
+      sheet.mergeCells(`E${sRow + 5}:H${sRow + 5}`);
+      sheet.getCell(`E${sRow + 5}`).value = `:  ${age25_60} Anak`;
+
+      for (let r = sRow + 2; r <= sRow + 5; r++) {
+        for (let c = 1; c <= 29; c++) {
+          const cell = sheet.getCell(r, c);
+          if (cell.value) {
+            cell.font = { name: 'Arial', size: 8.5, color: { argb: 'FF0F172A' } };
+          }
+        }
+      }
+
+      // Border luar Summary Box
+      const summaryBorder: Partial<ExcelJS.Borders> = {
+        top: { style: 'thin', color: { argb: 'FF0F766E' } },
+        left: { style: 'thin', color: { argb: 'FF0F766E' } },
+        bottom: { style: 'thin', color: { argb: 'FF0F766E' } },
+        right: { style: 'thin', color: { argb: 'FF0F766E' } },
+      };
+      applyBordersToRange(sheet, sRow, 1, sRow + 5, 29, summaryBorder);
+
+      // ─────────────────────────────────────────────────────────────
+      // SIGNATURE BLOCK (PERSIS FORMAT PDF)
+      // ─────────────────────────────────────────────────────────────
+      const sigRow = sRow + 7;
+      sheet.mergeCells(`V${sigRow}:AC${sigRow}`);
+      const sigDate = sheet.getCell(`V${sigRow}`);
+      sigDate.value = `${posyandu.desa || 'Desa'}, ${todayFormatted}`;
+      sigDate.font = { name: 'Arial', size: 9 };
+      sigDate.alignment = { horizontal: 'center' };
+
+      sheet.mergeCells(`V${sigRow + 1}:AC${sigRow + 1}`);
+      const sigMengetahui = sheet.getCell(`V${sigRow + 1}`);
+      sigMengetahui.value = 'Mengetahui,';
+      sigMengetahui.font = { name: 'Arial', size: 9 };
+      sigMengetahui.alignment = { horizontal: 'center' };
+
+      sheet.mergeCells(`V${sigRow + 2}:AC${sigRow + 2}`);
+      const sigKader = sheet.getCell(`V${sigRow + 2}`);
+      sigKader.value = 'Ketua / Kader Posyandu';
+      sigKader.font = { name: 'Arial', size: 9, bold: true };
+      sigKader.alignment = { horizontal: 'center' };
+
+      sheet.mergeCells(`V${sigRow + 6}:AC${sigRow + 6}`);
+      const sigName = sheet.getCell(`V${sigRow + 6}`);
+      sigName.value = '( ............................................ )';
+      sigName.font = { name: 'Arial', size: 9, bold: true };
+      sigName.alignment = { horizontal: 'center' };
     };
 
+    // ─────────────────────────────────────────────────────────────
+    // WORKSHEET LANSIA (PERSIS DENGAN FORMAT REGISTER PDF)
+    // ─────────────────────────────────────────────────────────────
     const createLansiaWorksheet = (sheetName: string, items: ItemRiwayat[]) => {
       const sheet = workbook.addWorksheet(sheetName, {
         pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
       });
+      sheet.views = [{ showGridLines: true }];
 
-      sheet.mergeCells('A1:J1');
-      sheet.getCell('A1').value = `LAPORAN PEMERIKSAAN LANSIA${filterInfoStr}`;
-      sheet.getCell('A1').font = { name: 'Arial', size: 14, bold: true };
-      sheet.getCell('A1').alignment = { horizontal: 'center' };
+      // Kop Surat Resmi (Persis PDF)
+      sheet.mergeCells('A1:P1');
+      sheet.getCell('A1').value = `REGISTER POSYANDU LANSIA ${rawPosName}`;
+      sheet.getCell('A1').font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF0F172A' } };
+      sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(1).height = 22;
 
-      sheet.mergeCells('A2:J2');
-      sheet.getCell('A2').value = `Posyandu: ${posyandu?.nama || '-'} | Desa: ${posyandu?.desa || '-'} | Kecamatan: ${posyandu?.kecamatan || '-'}`;
-      sheet.getCell('A2').font = { name: 'Arial', size: 10, italic: true };
-      sheet.getCell('A2').alignment = { horizontal: 'center' };
+      sheet.mergeCells('A2:P2');
+      sheet.getCell('A2').value = desaKecStr;
+      sheet.getCell('A2').font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E293B' } };
+      sheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(2).height = 18;
 
-      sheet.addRow([]);
+      sheet.mergeCells('A3:P3');
+      sheet.getCell('A3').value = tahunStr;
+      sheet.getCell('A3').font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF334155' } };
+      sheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(3).height = 16;
 
-      const headerRow = sheet.addRow([
-        'No',
-        'Nama Lansia',
-        'Tanggal Lahir',
-        'NIK',
-        'JK',
-        'Usia',
-        'DM',
-        'HT',
-        'Tekanan Darah (mmHg)',
-        'GDS (mg/dL)'
-      ]);
+      sheet.mergeCells('A4:P4');
+      sheet.getCell('A4').value = subTitleStr;
+      sheet.getCell('A4').font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF64748B' } };
+      sheet.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(4).height = 16;
 
-      headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 };
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: '4F46E5' },
-        };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      });
+      sheet.getRow(5).height = 10;
 
-      items.forEach((item, index) => {
-        const usiaText = getUsiaText(item.tanggalLahir, item.tanggal, 'Lansia');
-        const row = sheet.addRow([
-          index + 1,
-          item.nama,
-          item.tanggalLahir || '-',
-          item.nik || '-',
-          item.jenisKelamin || '-',
-          usiaText,
-          item.riwayatDm ? 'Ya' : 'Tdk',
-          item.riwayatHt ? 'Ya' : 'Tdk',
-          item.tekananDarahSistol ? `${item.tekananDarahSistol}/${item.tekananDarahDiastol}` : '-',
-          item.gulaDarahSewaktu ?? '-'
-        ]);
+      // Header Bertingkat (Baris 6 & 7)
+      for (let r = 6; r <= 7; r++) {
+        sheet.getRow(r).height = 20;
+        for (let c = 1; c <= 16; c++) {
+          styleHeaderCell(sheet.getCell(r, c), 'FF4338CA', 'FF3730A3', 8.5);
+        }
+      }
 
-        row.eachCell((cell) => {
-          cell.alignment = { horizontal: 'center' };
-        });
-        row.getCell(2).alignment = { horizontal: 'left' };
-      });
+      // Baris 6 (Header Group Level 1)
+      sheet.getCell('A6').value = 'NO';
+      sheet.getCell('B6').value = 'IDENTITAS LANSIA';
+      sheet.getCell('G6').value = 'RIWAYAT PENYAKIT';
+      sheet.getCell('I6').value = 'PEMERIKSAAN FISIK & VITAL';
+      sheet.getCell('L6').value = 'PEMERIKSAAN LAB & LINGKAR PERUT';
+      sheet.getCell('P6').value = 'KELUHAN & TINDAKAN MEDIS';
 
-      if (sheet.columns) {
-        (sheet.columns as Array<Partial<ExcelJS.Column>>).forEach((column) => {
-          let maxLength = 0;
-          if (column && typeof column.eachCell === 'function') {
-            column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
-              const columnLength = cell.value ? cell.value.toString().length : 10;
-              if (columnLength > maxLength) {
-                maxLength = columnLength;
-              }
-            });
+      // Baris 7 (Header Sub-Kolom Level 2)
+      sheet.getCell('B7').value = 'Nama Lansia';
+      sheet.getCell('C7').value = 'Tgl Lahir';
+      sheet.getCell('D7').value = 'NIK';
+      sheet.getCell('E7').value = 'JK';
+      sheet.getCell('F7').value = 'Usia';
+      sheet.getCell('G7').value = 'Riw HT';
+      sheet.getCell('H7').value = 'Riw DM';
+      sheet.getCell('I7').value = 'BB (kg)';
+      sheet.getCell('J7').value = 'TB (cm)';
+      sheet.getCell('K7').value = 'TD (mmHg)';
+      sheet.getCell('L7').value = 'GDS (mg/dL)';
+      sheet.getCell('M7').value = 'Kolesterol';
+      sheet.getCell('N7').value = 'Asam Urat';
+      sheet.getCell('O7').value = 'L.Perut (cm)';
+
+      // Merges
+      sheet.mergeCells('A6:A7');
+      sheet.mergeCells('B6:F6');
+      sheet.mergeCells('G6:H6');
+      sheet.mergeCells('I6:K6');
+      sheet.mergeCells('L6:O6');
+      sheet.mergeCells('P6:P7');
+
+      // Isi Data Lansia
+      let currentRow = 8;
+      if (items.length === 0) {
+        sheet.mergeCells(`A${currentRow}:P${currentRow}`);
+        const emptyCell = sheet.getCell(`A${currentRow}`);
+        emptyCell.value = 'Tidak ada data pemeriksaan lansia pada periode ini';
+        emptyCell.font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF64748B' } };
+        emptyCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        sheet.getRow(currentRow).height = 24;
+        applyBordersToRange(sheet, currentRow, 1, currentRow, 16, thinBorder);
+        currentRow++;
+      } else {
+        items.forEach((item, idx) => {
+          const usiaText = getUsiaText(item.tanggalLahir, item.tanggal, 'Lansia');
+          const tdText = item.tekananDarahSistol ? `${item.tekananDarahSistol}/${item.tekananDarahDiastol}` : '-';
+          const keluhanStr = item.keluhan ? `Keluhan: ${item.keluhan}` : '';
+          const tindakanStr = item.tindakan ? `Tindakan: ${item.tindakan}` : '';
+          const combinedDesc = [keluhanStr, tindakanStr].filter(Boolean).join(' | ') || '-';
+
+          const rowData = [
+            idx + 1,
+            item.nama || '-',
+            item.tanggalLahir ? item.tanggalLahir.substring(0, 10) : '-',
+            item.nik || '-',
+            item.jenisKelamin || '-',
+            usiaText,
+            item.riwayatHt ? 'Ya' : 'Tdk',
+            item.riwayatDm ? 'Ya' : 'Tdk',
+            item.beratBadan !== undefined ? item.beratBadan : '-',
+            item.tinggiBadan !== undefined ? item.tinggiBadan : '-',
+            tdText,
+            item.gulaDarahSewaktu !== undefined ? item.gulaDarahSewaktu : '-',
+            item.kolesterol !== undefined ? item.kolesterol : '-',
+            item.asamUrat !== undefined ? item.asamUrat : '-',
+            item.lingkarPerut !== undefined ? item.lingkarPerut : '-',
+            combinedDesc
+          ];
+
+          const row = sheet.getRow(currentRow);
+          row.values = rowData;
+          row.height = 20;
+
+          const isEven = idx % 2 === 0;
+          const bgArgb = isEven ? 'FFF8FAFC' : 'FFFFFFFF';
+
+          for (let c = 1; c <= 16; c++) {
+            const cell = sheet.getCell(currentRow, c);
+            cell.font = { name: 'Arial', size: 8.5, bold: c === 2 || c === 11 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+            cell.border = thinBorder;
+
+            if (c === 2 || c === 16) {
+              cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            } else {
+              cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            }
           }
-          column.width = Math.max(maxLength + 3, 10);
+
+          currentRow++;
         });
       }
+
+      // Lebar Kolom Lansia
+      const lansiaColWidths = [
+        6,   // 1: No
+        24,  // 2: Nama Lansia
+        13,  // 3: Tgl Lahir
+        18,  // 4: NIK
+        6,   // 5: JK
+        10,  // 6: Usia
+        10,  // 7: Riw HT
+        10,  // 8: Riw DM
+        9,   // 9: BB (kg)
+        9,   // 10: TB (cm)
+        14,  // 11: TD (mmHg)
+        14,  // 12: GDS (mg/dL)
+        12,  // 13: Kolesterol
+        12,  // 14: Asam Urat
+        12,  // 15: L.Perut (cm)
+        36   // 16: Keluhan & Tindakan Medis
+      ];
+
+      lansiaColWidths.forEach((w, i) => {
+        sheet.getColumn(i + 1).width = w;
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // SUMMARY BOX LENGKAP LANSIA (PERSIS FORMAT PDF)
+      // ─────────────────────────────────────────────────────────────
+      const getAgeInfo = (item: ItemRiwayat) => {
+        let m = item.usiaBulan;
+        if (m === undefined && item.tanggalLahir) {
+          const tL = new Date(item.tanggalLahir);
+          const tP = new Date(item.tanggal);
+          m = (tP.getFullYear() - tL.getFullYear()) * 12 + (tP.getMonth() - tL.getMonth());
+          if (tP.getDate() < tL.getDate()) m--;
+          if (m < 0) m = 0;
+        }
+        const months = m ?? 0;
+        const years = Math.floor(months / 12);
+        return { years };
+      };
+
+      const age45_59 = items.filter(i => getAgeInfo(i).years >= 45 && getAgeInfo(i).years <= 59).length;
+      const age60_69 = items.filter(i => getAgeInfo(i).years >= 60 && getAgeInfo(i).years <= 69).length;
+      const age70Plus = items.filter(i => getAgeInfo(i).years >= 70).length;
+
+      const totalHt = items.filter(i => (i.tekananDarahSistol || 0) >= 140 || (i.tekananDarahDiastol || 0) >= 90).length;
+      const totalDm = items.filter(i => (i.gulaDarahSewaktu || 0) >= 200).length;
+      const totalKolest = items.filter(i => (i.kolesterol || 0) >= 200).length;
+      const totalAsamUrat = items.filter(i => (i.asamUrat || 0) >= 7).length;
+
+      const sRow = currentRow + 1;
+
+      // Background Box Summary
+      for (let r = sRow; r <= sRow + 4; r++) {
+        sheet.getRow(r).height = 18;
+        for (let c = 1; c <= 16; c++) {
+          const cell = sheet.getCell(r, c);
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+        }
+      }
+
+      // Title Summary
+      sheet.mergeCells(`A${sRow}:P${sRow}`);
+      const sumTitleCell = sheet.getCell(`A${sRow}`);
+      sumTitleCell.value = 'SUMMARY KELOMPOK UMUR & REKAPITULASI PEMERIKSAAN POSYANDU';
+      sumTitleCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF065F46' } };
+      sumTitleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      sheet.getRow(sRow).height = 22;
+
+      // Group Subtitles
+      sheet.mergeCells(`B${sRow + 1}:F${sRow + 1}`);
+      const g1 = sheet.getCell(`B${sRow + 1}`);
+      g1.value = 'Rentang Umur Lansia:';
+      g1.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+
+      sheet.mergeCells(`I${sRow + 1}:N${sRow + 1}`);
+      const g2 = sheet.getCell(`I${sRow + 1}`);
+      g2.value = 'Ringkasan Kesehatan & Hasil Lab Lansia:';
+      g2.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+
+      // Row 1 Values
+      sheet.mergeCells(`B${sRow + 2}:D${sRow + 2}`);
+      sheet.getCell(`B${sRow + 2}`).value = '• 45 - 59 Tahun (Pra-Lansia)';
+      sheet.mergeCells(`E${sRow + 2}:F${sRow + 2}`);
+      sheet.getCell(`E${sRow + 2}`).value = `:  ${age45_59} Orang`;
+
+      sheet.mergeCells(`I${sRow + 2}:K${sRow + 2}`);
+      sheet.getCell(`I${sRow + 2}`).value = '• Hipertensi (TD ≥ 140/90)';
+      sheet.mergeCells(`L${sRow + 2}:P${sRow + 2}`);
+      sheet.getCell(`L${sRow + 2}`).value = `:  ${totalHt} Orang`;
+
+      // Row 2 Values
+      sheet.mergeCells(`B${sRow + 3}:D${sRow + 3}`);
+      sheet.getCell(`B${sRow + 3}`).value = '• 60 - 69 Tahun (Lansia)';
+      sheet.mergeCells(`E${sRow + 3}:F${sRow + 3}`);
+      sheet.getCell(`E${sRow + 3}`).value = `:  ${age60_69} Orang`;
+
+      sheet.mergeCells(`I${sRow + 3}:K${sRow + 3}`);
+      sheet.getCell(`I${sRow + 3}`).value = '• Diabetes (GDS ≥ 200 mg/dL)';
+      sheet.mergeCells(`L${sRow + 3}:P${sRow + 3}`);
+      sheet.getCell(`L${sRow + 3}`).value = `:  ${totalDm} Orang`;
+
+      // Row 3 Values
+      sheet.mergeCells(`B${sRow + 4}:D${sRow + 4}`);
+      sheet.getCell(`B${sRow + 4}`).value = '• ≥ 70 Tahun (Lansia Risiko)';
+      sheet.mergeCells(`E${sRow + 4}:F${sRow + 4}`);
+      sheet.getCell(`E${sRow + 4}`).value = `:  ${age70Plus} Orang`;
+
+      sheet.mergeCells(`I${sRow + 4}:K${sRow + 4}`);
+      sheet.getCell(`I${sRow + 4}`).value = '• Kolesterol Tinggi (≥ 200) / Asam Urat (≥ 7)';
+      sheet.mergeCells(`L${sRow + 4}:P${sRow + 4}`);
+      sheet.getCell(`L${sRow + 4}`).value = `:  Kolest(${totalKolest}) | Asam Urat(${totalAsamUrat})`;
+
+      for (let r = sRow + 2; r <= sRow + 4; r++) {
+        for (let c = 1; c <= 16; c++) {
+          const cell = sheet.getCell(r, c);
+          if (cell.value) {
+            cell.font = { name: 'Arial', size: 8.5, color: { argb: 'FF0F172A' } };
+          }
+        }
+      }
+
+      // Border luar Summary Box
+      const summaryBorder: Partial<ExcelJS.Borders> = {
+        top: { style: 'thin', color: { argb: 'FF0F766E' } },
+        left: { style: 'thin', color: { argb: 'FF0F766E' } },
+        bottom: { style: 'thin', color: { argb: 'FF0F766E' } },
+        right: { style: 'thin', color: { argb: 'FF0F766E' } },
+      };
+      applyBordersToRange(sheet, sRow, 1, sRow + 4, 16, summaryBorder);
+
+      // ─────────────────────────────────────────────────────────────
+      // SIGNATURE BLOCK (PERSIS FORMAT PDF)
+      // ─────────────────────────────────────────────────────────────
+      const sigRow = sRow + 6;
+      sheet.mergeCells(`L${sigRow}:P${sigRow}`);
+      const sigDate = sheet.getCell(`L${sigRow}`);
+      sigDate.value = `${posyandu.desa || 'Desa'}, ${todayFormatted}`;
+      sigDate.font = { name: 'Arial', size: 9 };
+      sigDate.alignment = { horizontal: 'center' };
+
+      sheet.mergeCells(`L${sigRow + 1}:P${sigRow + 1}`);
+      const sigMengetahui = sheet.getCell(`L${sigRow + 1}`);
+      sigMengetahui.value = 'Mengetahui,';
+      sigMengetahui.font = { name: 'Arial', size: 9 };
+      sigMengetahui.alignment = { horizontal: 'center' };
+
+      sheet.mergeCells(`L${sigRow + 2}:P${sigRow + 2}`);
+      const sigKader = sheet.getCell(`L${sigRow + 2}`);
+      sigKader.value = 'Ketua / Kader Posyandu';
+      sigKader.font = { name: 'Arial', size: 9, bold: true };
+      sigKader.alignment = { horizontal: 'center' };
+
+      sheet.mergeCells(`L${sigRow + 6}:P${sigRow + 6}`);
+      const sigName = sheet.getCell(`L${sigRow + 6}`);
+      sigName.value = '( ............................................ )';
+      sigName.font = { name: 'Arial', size: 9, bold: true };
+      sigName.alignment = { horizontal: 'center' };
     };
 
     if (filter.tipe === 'Balita') {
@@ -505,10 +1068,10 @@ export const riwayatService = {
       createLansiaWorksheet('Data Lansia', data.filter(d => d.tipe === 'Lansia'));
     } else {
       const balitaData = data.filter((d) => d.tipe === 'Balita');
-      if (balitaData.length > 0) {
+      const lansiaData = data.filter((d) => d.tipe === 'Lansia');
+      if (balitaData.length > 0 || lansiaData.length === 0) {
         createBalitaWorksheet('Data Balita', balitaData);
       }
-      const lansiaData = data.filter((d) => d.tipe === 'Lansia');
       if (lansiaData.length > 0) {
         createLansiaWorksheet('Data Lansia', lansiaData);
       }

@@ -1,5 +1,6 @@
 import prisma from '../../shared/config/prisma';
 import { kelompokUmurLansia } from './lansia.helper';
+import cacheService from '../../shared/services/cache.service';
 
 export const lansiaService = {
   async findAll(
@@ -84,21 +85,27 @@ export const lansiaService = {
   },
 
   async create(posyanduId: string, data: any) {
-    return prisma.lansia.create({
+    const result = await prisma.lansia.create({
       data: { ...data, posyanduId },
     });
+    cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
+    return result;
   },
 
   async update(id: string, posyanduId: string, data: Parameters<typeof prisma.lansia.update>[0]['data']) {
     const lansia = await prisma.lansia.findFirst({ where: { id, posyanduId } });
     if (!lansia) throw new Error('Lansia tidak ditemukan');
-    return prisma.lansia.update({ where: { id }, data });
+    const result = await prisma.lansia.update({ where: { id }, data });
+    cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
+    return result;
   },
 
   async delete(id: string, posyanduId: string) {
     const lansia = await prisma.lansia.findFirst({ where: { id, posyanduId } });
     if (!lansia) throw new Error('Lansia tidak ditemukan');
-    return prisma.lansia.delete({ where: { id } });
+    const result = await prisma.lansia.delete({ where: { id } });
+    cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
+    return result;
   },
 
   // ── Pemeriksaan Lansia ─────────────────────────────────────
@@ -143,24 +150,32 @@ export const lansiaService = {
       orderBy: { createdAt: 'desc' },
     });
 
+    let result;
     if (existingExam) {
-      return prisma.pemeriksaanLansia.update({
+      result = await prisma.pemeriksaanLansia.update({
         where: { id: existingExam.id },
         data,
       });
+    } else {
+      result = await prisma.pemeriksaanLansia.create({ data: { ...data, lansiaId } });
     }
 
-    return prisma.pemeriksaanLansia.create({ data: { ...data, lansiaId } });
+    cacheService.delByPattern(`dashboard:*:${lansia.posyanduId}*`).catch(() => {});
+    return result;
   },
 
   async updatePemeriksaan(
     id: string,
     data: Partial<Parameters<typeof prisma.pemeriksaanLansia.update>[0]['data']>
   ) {
-    return prisma.pemeriksaanLansia.update({ where: { id }, data });
+    const result = await prisma.pemeriksaanLansia.update({ where: { id }, data });
+    cacheService.delByPattern('dashboard:*').catch(() => {});
+    return result;
   },
 
   async deletePemeriksaan(id: string) {
-    return prisma.pemeriksaanLansia.delete({ where: { id } });
+    const result = await prisma.pemeriksaanLansia.delete({ where: { id } });
+    cacheService.delByPattern('dashboard:*').catch(() => {});
+    return result;
   },
 };
