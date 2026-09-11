@@ -1,37 +1,56 @@
-import Redis from 'ioredis';
+import Redis, { RedisOptions } from 'ioredis';
 
-const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
-const REDIS_PORT = Number(process.env.REDIS_PORT) || 6379;
-const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
 const REDIS_URL = process.env.REDIS_URL;
 
 let isReady = false;
 
-const redisOptions: import('ioredis').RedisOptions = {
-  host: REDIS_HOST,
-  port: REDIS_PORT,
-  password: REDIS_PASSWORD,
-  maxRetriesPerRequest: 3,
-  retryStrategy(times) {
-    // Retry interval bertahap (maks 3 detik)
-    const delay = Math.min(times * 100, 3000);
-    return delay;
-  },
-  reconnectOnError(err) {
-    const targetError = 'READONLY';
-    if (err.message.includes(targetError)) {
-      return true;
-    }
-    return false;
-  },
-  lazyConnect: false,
-  enableReadyCheck: true,
-};
+function createRedisClient(): Redis {
+  const commonOptions: RedisOptions = {
+    maxRetriesPerRequest: 3,
+    retryStrategy(times) {
+      const delay = Math.min(times * 100, 3000);
+      return delay;
+    },
+    reconnectOnError(err) {
+      const targetError = 'READONLY';
+      if (err.message.includes(targetError)) {
+        return true;
+      }
+      return false;
+    },
+    lazyConnect: false,
+    enableReadyCheck: true,
+  };
 
-export const redis = REDIS_URL ? new Redis(REDIS_URL, redisOptions) : new Redis(redisOptions);
+  // Jika menggunakan URL (misalnya Upstash: rediss://default:password@xxx.upstash.io:6379)
+  if (REDIS_URL && REDIS_URL.trim() !== '') {
+    const isTls = REDIS_URL.startsWith('rediss://');
+    return new Redis(REDIS_URL, {
+      ...commonOptions,
+      ...(isTls ? { tls: { rejectUnauthorized: false } } : {}),
+    });
+  }
+
+  // Fallback jika menggunakan host/port terpisah (Docker / lokal)
+  const host = process.env.REDIS_HOST || 'localhost';
+  const port = Number(process.env.REDIS_PORT) || 6379;
+  const password = process.env.REDIS_PASSWORD || undefined;
+
+  return new Redis({
+    ...commonOptions,
+    host,
+    port,
+    password,
+  });
+}
+
+export const redis = createRedisClient();
 
 redis.on('connect', () => {
-  console.log(`🔌 Menghubungkan ke Redis (${REDIS_URL ? REDIS_URL : `${REDIS_HOST}:${REDIS_PORT}`})...`);
+  const target = REDIS_URL 
+    ? REDIS_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@') // Mask password di log
+    : `${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`;
+  console.log(`🔌 Menghubungkan ke Redis (${target})...`);
 });
 
 redis.on('ready', () => {
