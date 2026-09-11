@@ -144,7 +144,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
       if (formRef.current) {
         formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-      setSuccessToast(`Memuat data pemeriksaan ${target.nama} untuk diedit.`);
       toast.success(`Memuat data pemeriksaan ${target.nama} untuk diedit.`);
     } else {
       setFormError(`Data pasien ${log.nama} tidak ditemukan.`);
@@ -167,9 +166,8 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
       } else {
         await lansiaApi.deletePemeriksaan(posyanduId, deletingLog.pasienId, deletingLog.id);
       }
-      setSuccessToast(`Record pemeriksaan ${deletingLog.nama} berhasil dihapus.`);
       toast.success(`Record pemeriksaan ${deletingLog.nama} berhasil dihapus.`);
-      fetchPatients();
+      fetchPatients(true);
       setDeletingLog(null);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : "Gagal menghapus record.";
@@ -218,8 +216,10 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
 
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchPatients = () => {
-    setIsLoading(true);
+  const fetchPatients = (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+    }
     const targetMonth = activePeriode ? activePeriode.bulan : (new Date().getMonth() + 1);
     const targetYear = activePeriode ? activePeriode.tahun : new Date().getFullYear();
 
@@ -484,9 +484,14 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
     examTindakan?: string;
   }
 
+  const loadedPatientIdRef = useRef<string | null>(null);
+
   // Auto-save form draft for active patient ke shared storage
   useEffect(() => {
     if (!selectedPasien?.id) return;
+    // PENTING: Hanya simpan draft jika form saat ini sudah tersinkron untuk pasien ini (mencegah data pasien lama menimpa pasien baru)
+    if (loadedPatientIdRef.current !== selectedPasien.id) return;
+
     saveExamDraft(posyanduId, selectedPasien.id, {
       examDate,
       examBB,
@@ -538,8 +543,99 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
 
   // Pre-fill form jika pasien sudah memiliki data pemeriksaan atau draft tersimpan
   useEffect(() => {
-    if (!selectedPasien) return;
+    if (!selectedPasien) {
+      loadedPatientIdRef.current = null;
+      setExamBB("");
+      setExamTB("");
+      setExamLK("");
+      setExamLiLA("");
+      setExamVitA(false);
+      setExamVitB1(false);
+      setExamVitB6(false);
+      setExamAsi(true);
+      setExamCacing(false);
+      setExamImunisasi("");
+      setCheckedPemberianMap({});
+      setExamSistol("");
+      setExamDiastol("");
+      setExamGds("");
+      setExamLp("");
+      setExamCholesterol("");
+      setExamUricAcid("");
+      setExamKeluhan("");
+      setExamTindakan("");
+      return;
+    }
 
+    const exam = selectedPasien.currentPeriodExam;
+    // 1. Prioritaskan data resmi dari database untuk periode ini
+    if (exam) {
+      clearExamDraft(posyanduId, selectedPasien.id);
+      if (exam.tanggalPeriksa) {
+        setExamDate(new Date(exam.tanggalPeriksa).toISOString().slice(0, 10));
+      }
+      setExamBB(exam.beratBadan ? String(exam.beratBadan) : "");
+      setExamTB(exam.tinggiBadan ? String(exam.tinggiBadan) : "");
+
+      if (selectedPasien.tipe === "Balita") {
+        setExamLK(exam.lingkarKepala ? String(exam.lingkarKepala) : "");
+        setExamLiLA(exam.lingkarLengan ? String(exam.lingkarLengan) : "");
+        setExamKms(exam.statusKms || "N");
+        setExamVitA(Boolean(exam.vitaminA));
+        setExamVitB1(Boolean(exam.vitB1));
+        setExamVitB6(Boolean(exam.vitB6));
+        setExamAsi(Boolean(exam.asiEksklusif));
+        setExamCacing(Boolean(exam.obatCacing));
+        const rawImun = exam.statusImunisasi || "";
+        const matches = [...rawImun.matchAll(/Pemberian:\s*([^|]+)/gi)];
+        const newChecked: Record<string, boolean> = {};
+        const itemsFound: string[] = [];
+        for (const m of matches) {
+          m[1].split(',').forEach((s: string) => {
+            const t = s.trim();
+            if (t) {
+              newChecked[t] = true;
+              itemsFound.push(t);
+            }
+          });
+        }
+        setCheckedPemberianMap(newChecked);
+
+        if (itemsFound.length > 0) {
+          setMasterPemberianOptions((prev) => {
+            const lowerSet = new Set(prev.map(p => p.toLowerCase()));
+            const toAdd = itemsFound.filter(item => !lowerSet.has(item.toLowerCase()));
+            if (toAdd.length === 0) return prev;
+            const next = [...prev, ...toAdd];
+            if (posyanduId) {
+              try {
+                localStorage.setItem(`posyandu_pemberian_options_${posyanduId}`, JSON.stringify(next));
+              } catch (e) {}
+            }
+            return next;
+          });
+        }
+
+        const pureImunisasi = rawImun
+          .replace(/(^|\|\s*)Pemberian:.*$/gi, "")
+          .replace(/\|\s*$/, "")
+          .trim();
+        setExamImunisasi(pureImunisasi);
+      } else {
+        setExamSistol(exam.tekananDarahSistol ? String(exam.tekananDarahSistol) : "");
+        setExamDiastol(exam.tekananDarahDiastol ? String(exam.tekananDarahDiastol) : "");
+        setExamGds(exam.gulaDarahSewaktu ? String(exam.gulaDarahSewaktu) : "");
+        setExamLp(exam.lingkarPerut ? String(exam.lingkarPerut) : "");
+        setExamCholesterol(exam.kolesterol ? String(exam.kolesterol) : "");
+        setExamUricAcid(exam.asamUrat ? String(exam.asamUrat) : "");
+        setExamKeluhan(exam.keluhan || "");
+        setExamTindakan(exam.tindakan || "");
+      }
+      loadedPatientIdRef.current = selectedPasien.id;
+      return;
+    }
+
+    // 2. Jika belum ada pemeriksaan resmi di periode ini, cek draft tersimpan khusus pasien ini
     const draft = getExamDraft(posyanduId, selectedPasien.id);
     const hasDraftContent = Boolean(
       draft && (
@@ -582,94 +678,37 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
       setExamUricAcid(draft.examUricAcid ?? "");
       setExamKeluhan(draft.examKeluhan ?? "");
       setExamTindakan(draft.examTindakan ?? "");
+      loadedPatientIdRef.current = selectedPasien.id;
       return;
     }
 
-    const exam = selectedPasien.currentPeriodExam;
-    if (exam) {
-      if (exam.tanggalPeriksa) {
-        setExamDate(new Date(exam.tanggalPeriksa).toISOString().slice(0, 10));
-      }
-      setExamBB(exam.beratBadan ? String(exam.beratBadan) : "");
-      setExamTB(exam.tinggiBadan ? String(exam.tinggiBadan) : "");
-
-      if (selectedPasien.tipe === "Balita") {
-        setExamLK(exam.lingkarKepala ? String(exam.lingkarKepala) : "");
-        setExamLiLA(exam.lingkarLengan ? String(exam.lingkarLengan) : "");
-        setExamKms(exam.statusKms || "N");
-        setExamVitA(Boolean(exam.vitaminA));
-        setExamVitB1(Boolean(exam.vitB1));
-        setExamVitB6(Boolean(exam.vitB6));
-        setExamAsi(Boolean(exam.asiEksklusif));
-        const rawImun = exam.statusImunisasi || "";
-        const matches = [...rawImun.matchAll(/Pemberian:\s*([^|]+)/gi)];
-        const newChecked: Record<string, boolean> = {};
-        const itemsFound: string[] = [];
-        for (const m of matches) {
-          m[1].split(',').forEach((s: string) => {
-            const t = s.trim();
-            if (t) {
-              newChecked[t] = true;
-              itemsFound.push(t);
-            }
-          });
-        }
-        setCheckedPemberianMap(newChecked);
-
-        // Pastikan opsi yang ada di data pemeriksaan tersinkron ke masterPemberianOptions agar checkbox-nya tampil & tercentang
-        if (itemsFound.length > 0) {
-          setMasterPemberianOptions((prev) => {
-            const lowerSet = new Set(prev.map(p => p.toLowerCase()));
-            const toAdd = itemsFound.filter(item => !lowerSet.has(item.toLowerCase()));
-            if (toAdd.length === 0) return prev;
-            const next = [...prev, ...toAdd];
-            if (posyanduId) {
-              try {
-                localStorage.setItem(`posyandu_pemberian_options_${posyanduId}`, JSON.stringify(next));
-              } catch (e) {}
-            }
-            return next;
-          });
-        }
-
-        // Pertahankan imunisasi murni tanpa string Pemberian:
-        const pureImunisasi = rawImun
-          .replace(/(^|\|\s*)Pemberian:.*$/gi, "")
-          .replace(/\|\s*$/, "")
-          .trim();
-        setExamImunisasi(pureImunisasi);
-      } else {
-        setExamSistol(exam.tekananDarahSistol ? String(exam.tekananDarahSistol) : "");
-        setExamDiastol(exam.tekananDarahDiastol ? String(exam.tekananDarahDiastol) : "");
-        setExamGds(exam.gulaDarahSewaktu ? String(exam.gulaDarahSewaktu) : "");
-        setExamLp(exam.lingkarPerut ? String(exam.lingkarPerut) : "");
-        setExamCholesterol(exam.kolesterol ? String(exam.kolesterol) : "");
-        setExamUricAcid(exam.asamUrat ? String(exam.asamUrat) : "");
-        setExamKeluhan(exam.keluhan || "");
-        setExamTindakan(exam.tindakan || "");
-      }
-    } else {
-      setExamBB("");
-      setExamTB("");
-      setExamLK("");
-      setExamLiLA("");
-      setExamVitA(false);
-      setExamVitB1(false);
-      setExamVitB6(false);
-      setExamAsi(true);
-      setExamCacing(false);
-      setExamImunisasi("");
-      setCheckedPemberianMap({});
-      setExamSistol("");
-      setExamDiastol("");
-      setExamGds("");
-      setExamLp("");
-      setExamCholesterol("");
-      setExamUricAcid("");
-      setExamKeluhan("");
-      setExamTindakan("");
-    }
-  }, [selectedPasien]);
+    // 3. Pasien belum pernah diperiksa pada periode ini dan tidak ada draft -> KOSONGKAN FORM!
+    const defaultDate = activePeriode?.tanggal 
+      ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
+      : new Date().toISOString().slice(0, 10);
+    setExamDate(defaultDate);
+    setExamBB("");
+    setExamTB("");
+    setExamLK("");
+    setExamLiLA("");
+    setExamVitA(false);
+    setExamVitB1(false);
+    setExamVitB6(false);
+    setExamAsi(true);
+    setExamCacing(false);
+    setExamImunisasi("");
+    setCheckedPemberianMap({});
+    setExamSistol("");
+    setExamDiastol("");
+    setExamGds("");
+    setExamLp("");
+    setExamCholesterol("");
+    setExamUricAcid("");
+    setExamKeluhan("");
+    setExamTindakan("");
+    setFormWarning("");
+    loadedPatientIdRef.current = selectedPasien.id;
+  }, [selectedPasien, posyanduId, activePeriode]);
 
   // Otomatisasi Status Gizi Balita (Z-Score)
   useEffect(() => {
@@ -692,7 +731,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
   // Error & Feedback (Checkup)
   const [formError, setFormError] = useState("");
   const [formWarning, setFormWarning] = useState("");
-  const [successToast, setSuccessToast] = useState("");
 
   // Filter Patients based on active page/tab, status periksa & search query
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -863,41 +901,14 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
 
       clearExamDraft(posyanduId, selectedPasien.id);
 
-      setSessionLogs([newLog, ...sessionLogs]);
-      setSuccessToast(`Pemeriksaan bulanan untuk ${selectedPasien.nama} berhasil disimpan ke database.`);
-      toast.success(`Pemeriksaan bulanan untuk ${selectedPasien.nama} berhasil disimpan ke database.`);
-      fetchPatients();
-
-      setExamBB("");
-      setExamTB("");
-      setExamLK("");
-      setExamSistol("");
-      setExamDiastol("");
-      setExamGds("");
-      setExamLp("");
-      setExamLiLA("");
-      setExamCholesterol("");
-      setExamUricAcid("");
-      setExamKeluhan("");
-      setExamTindakan("");
-      setExamKms("N");
-      setExamAsi(false);
-      setExamCacing(false);
-      setExamImunisasi("");
-      setExamBBU("Normal");
-      setExamTBU("Normal");
-      setExamBBTB("Normal");
-      setExamVitA(false);
-      setExamVitB1(false);
-      setExamVitB6(false);
-      if (selectedPasien?.id) {
-        clearExamDraft(posyanduId, selectedPasien.id);
-      }
-      setActivePatientId(posyanduId, null);
-      setSelectedPasien(null);
+      setSessionLogs([newLog, ...sessionLogs.filter((l) => l.pasienId !== selectedPasien.id)]);
+      toast.success(
+        selectedPasien.isCheckedInCurrentPeriod
+          ? `Hasil pemeriksaan untuk ${selectedPasien.nama} berhasil diperbarui!`
+          : `Hasil pemeriksaan untuk ${selectedPasien.nama} berhasil disimpan!`
+      );
+      fetchPatients(true);
       setFormWarning("");
-
-      setTimeout(() => setSuccessToast(""), 4000);
     } catch (err: any) {
       console.error("Gagal menyimpan data pemeriksaan ke API:", err);
       const msg = err.message || "Gagal menyimpan data pemeriksaan ke database.";
@@ -950,7 +961,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setActiveTab("Balita");
         setSelectedPasien(newPasien);
         setShowAddBalitaModal(false);
-        setSuccessToast(`${bNama} berhasil didaftarkan & dipilih.`);
         toast.success(`${bNama} berhasil didaftarkan & dipilih.`);
 
         setBNama("");
@@ -959,7 +969,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setBJk("L");
         setBNamaIbu("");
         setBAlamat("RT 01 / RW 02, Karanggayam");
-        setTimeout(() => setSuccessToast(""), 4000);
       }
     } catch (err: any) {
       const msg = err.message || "Gagal mendaftarkan balita.";
@@ -1017,7 +1026,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setActiveTab("Lansia");
         setSelectedPasien(newPasien);
         setShowAddLansiaModal(false);
-        setSuccessToast(`Lansia ${lNama} berhasil didaftarkan & dipilih.`);
         toast.success(`Lansia ${lNama} berhasil didaftarkan & dipilih.`);
 
         setLNama("");
@@ -1031,7 +1039,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setLDm(false);
         setLKemandirian("A");
         setLMental("");
-        setTimeout(() => setSuccessToast(""), 4000);
       }
     } catch (err: any) {
       const msg = err.message || "Gagal mendaftarkan lansia.";
@@ -1062,13 +1069,6 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
             : "Pencatatan pelayanan dan skrining kesehatan fisik lansia PosyanduKita."
         }
       />
-      {/* Success Toast */}
-      {successToast && (
-        <div className="fixed bottom-6 right-6 z-50 p-4 bg-green-50 text-trend-successText border border-green-150 rounded-card shadow-lg flex items-center gap-2.5">
-          <UserCheck2 className="w-5 h-5 text-green-600 shrink-0" />
-          <span className="text-xs font-bold">{successToast}</span>
-        </div>
-      )}
 
       {/* Banner Periode Pelayanan Aktif */}
       <div className="bg-white rounded-xl border border-gray-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">

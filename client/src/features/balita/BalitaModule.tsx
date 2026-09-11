@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Modal from "../../components/Modal";
 import PageHelmet from "../../components/PageHelmet";
 import {
@@ -469,9 +469,14 @@ export default function BalitaModule({ posyanduId, activePeriode, onNavigateToPe
     checkedPemberianMap?: Record<string, boolean>;
   }
 
+  const loadedBalitaIdRef = useRef<string | null>(null);
+
   // Auto-save form draft for selected balita ke shared storage
   useEffect(() => {
     if (!selectedBalitaId) return;
+    // Mencegah data balita sebelumnya menimpa balita yang baru dipilih
+    if (loadedBalitaIdRef.current !== selectedBalitaId) return;
+
     saveExamDraft(posyanduId, selectedBalitaId, {
       examDate,
       examBB,
@@ -909,44 +914,14 @@ export default function BalitaModule({ posyanduId, activePeriode, onNavigateToPe
 
   // Pre-fill form pemeriksaan jika balita sudah memiliki data pemeriksaan pada periode ini atau draft tersimpan
   useEffect(() => {
-    if (!activeBalita) return;
-
-    const draft = getExamDraft(posyanduId, activeBalita.id);
-    const draftDate = draft?.examDate ? new Date(draft.examDate) : null;
-    const isDraftForCurrentPeriod = draftDate
-      ? (draftDate.getMonth() + 1) === targetMonth && draftDate.getFullYear() === targetYear
-      : true;
-
-    const hasDraftContent = Boolean(
-      isDraftForCurrentPeriod &&
-      draft && (
-        draft.examBB ||
-        draft.examTB ||
-        draft.examLK ||
-        draft.examLiLA ||
-        draft.examImunisasi ||
-        (draft.checkedPemberianMap && Object.values(draft.checkedPemberianMap).some(Boolean))
-      )
-    );
-
-    if (hasDraftContent && draft) {
-      if (draft.examDate) setExamDate(draft.examDate);
-      setExamBB(draft.examBB ?? "");
-      setExamTB(draft.examTB ?? "");
-      setExamLK(draft.examLK ?? "");
-      setExamLiLA(draft.examLiLA ?? "");
-      setExamKms(draft.examKms ?? "N");
-      setExamVitA(draft.examVitA ?? false);
-      setExamVitB1(draft.examVitB1 ?? false);
-      setExamVitB6(draft.examVitB6 ?? false);
-      setExamAsi(draft.examAsi ?? true);
-      setExamCacing(draft.examCacing ?? false);
-      setExamImunisasi(draft.examImunisasi ?? "");
-      setCheckedPemberianMap(draft.checkedPemberianMap ?? {});
+    if (!activeBalita) {
+      loadedBalitaIdRef.current = null;
       return;
     }
 
+    // 1. Prioritaskan data resmi database jika balita sudah diperiksa pada periode ini
     if (currentPeriodExam) {
+      clearExamDraft(posyanduId, activeBalita.id);
       if (currentPeriodExam.tanggalPeriksa) {
         setExamDate(formatTanggalInput(currentPeriodExam.tanggalPeriksa));
       }
@@ -995,26 +970,66 @@ export default function BalitaModule({ posyanduId, activePeriode, onNavigateToPe
         .replace(/\|\s*$/, "")
         .trim();
       setExamImunisasi(pureImunisasi);
-    } else {
-      // Belum ada data pada periode ini -> form KOSONG
-      const defaultDate = activePeriode?.tanggal 
-        ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
-        : new Date().toISOString().slice(0, 10);
-      setExamDate(defaultDate);
-      setExamBB("");
-      setExamTB("");
-      setExamLK("");
-      setExamLiLA("");
-      setExamKms("N");
-      setExamVitA(false);
-      setExamVitB1(false);
-      setExamVitB6(false);
-      setExamAsi(true);
-      setExamCacing(false);
-      setExamImunisasi("");
-      setCheckedPemberianMap({});
+      loadedBalitaIdRef.current = activeBalita.id;
+      return;
     }
-  }, [activeBalita, activePeriode, posyanduId]);
+
+    // 2. Jika belum diperiksa, cek draft tersimpan khusus balita ini
+    const draft = getExamDraft(posyanduId, activeBalita.id);
+    const draftDate = draft?.examDate ? new Date(draft.examDate) : null;
+    const isDraftForCurrentPeriod = draftDate
+      ? (draftDate.getMonth() + 1) === targetMonth && draftDate.getFullYear() === targetYear
+      : true;
+
+    const hasDraftContent = Boolean(
+      isDraftForCurrentPeriod &&
+      draft && (
+        draft.examBB ||
+        draft.examTB ||
+        draft.examLK ||
+        draft.examLiLA ||
+        draft.examImunisasi ||
+        (draft.checkedPemberianMap && Object.values(draft.checkedPemberianMap).some(Boolean))
+      )
+    );
+
+    if (hasDraftContent && draft) {
+      if (draft.examDate) setExamDate(draft.examDate);
+      setExamBB(draft.examBB ?? "");
+      setExamTB(draft.examTB ?? "");
+      setExamLK(draft.examLK ?? "");
+      setExamLiLA(draft.examLiLA ?? "");
+      setExamKms(draft.examKms ?? "N");
+      setExamVitA(draft.examVitA ?? false);
+      setExamVitB1(draft.examVitB1 ?? false);
+      setExamVitB6(draft.examVitB6 ?? false);
+      setExamAsi(draft.examAsi ?? true);
+      setExamCacing(draft.examCacing ?? false);
+      setExamImunisasi(draft.examImunisasi ?? "");
+      setCheckedPemberianMap(draft.checkedPemberianMap ?? {});
+      loadedBalitaIdRef.current = activeBalita.id;
+      return;
+    }
+
+    // 3. Belum ada data pada periode ini -> form KOSONG
+    const defaultDate = activePeriode?.tanggal 
+      ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
+      : new Date().toISOString().slice(0, 10);
+    setExamDate(defaultDate);
+    setExamBB("");
+    setExamTB("");
+    setExamLK("");
+    setExamLiLA("");
+    setExamKms("N");
+    setExamVitA(false);
+    setExamVitB1(false);
+    setExamVitB6(false);
+    setExamAsi(true);
+    setExamCacing(false);
+    setExamImunisasi("");
+    setCheckedPemberianMap({});
+    loadedBalitaIdRef.current = activeBalita.id;
+  }, [activeBalita, activePeriode, posyanduId, currentPeriodExam, targetMonth, targetYear]);
 
   return (
     <div className="space-y-6">

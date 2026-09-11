@@ -20,6 +20,7 @@ export interface FormExamDraft {
   examUricAcid?: string;
   examKeluhan?: string;
   examTindakan?: string;
+  patientId?: string;
   updatedAt?: number;
 }
 
@@ -40,7 +41,11 @@ export function getAllExamDrafts(posyanduId: string): Record<string, FormExamDra
 export function getExamDraft(posyanduId: string, patientId: string): FormExamDraft | null {
   if (!patientId) return null;
   const all = getAllExamDrafts(posyanduId);
-  return all[patientId] || null;
+  const draft = all[patientId];
+  if (!draft) return null;
+  // Jika draft memiliki patientId dan tidak cocok dengan patientId yang diminta, abaikan
+  if (draft.patientId && draft.patientId !== patientId) return null;
+  return draft;
 }
 
 export function saveExamDraft(
@@ -54,6 +59,7 @@ export function saveExamDraft(
     all[patientId] = {
       ...all[patientId],
       ...draft,
+      patientId,
       updatedAt: Date.now(),
     };
     sessionStorage.setItem(`${STORAGE_KEY_PREFIX}${posyanduId}`, JSON.stringify(all));

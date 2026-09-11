@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Modal from "../../components/Modal";
 import PageHelmet from "../../components/PageHelmet";
 import { TableSkeleton } from "../../components/Skeleton";
@@ -310,9 +310,14 @@ export default function LansiaModule({ posyanduId, activePeriode, searchQuery = 
     return (d.getMonth() + 1) === targetMonth && d.getFullYear() === targetYear;
   });
 
+  const loadedLansiaIdRef = useRef<string | null>(null);
+
   // Auto-save form draft for selected lansia ke shared storage
   useEffect(() => {
     if (!selectedLansiaId) return;
+    // Mencegah data lansia sebelumnya menimpa lansia yang baru dipilih
+    if (loadedLansiaIdRef.current !== selectedLansiaId) return;
+
     saveExamDraft(posyanduId, selectedLansiaId, {
       examDate,
       examBB,
@@ -696,12 +701,34 @@ export default function LansiaModule({ posyanduId, activePeriode, searchQuery = 
   // Pre-fill form pemeriksaan jika lansia sudah memiliki data pemeriksaan pada periode ini atau draft tersimpan
   useEffect(() => {
     if (!activeLansia) {
+      loadedLansiaIdRef.current = null;
       setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
       setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
       setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
       return;
     }
 
+    // 1. Prioritaskan data resmi dari database jika lansia sudah diperiksa pada periode ini
+    if (currentPeriodExam) {
+      clearExamDraft(posyanduId, activeLansia.id);
+      if (currentPeriodExam.tanggalPeriksa) {
+        setExamDate(formatTanggalInput(currentPeriodExam.tanggalPeriksa));
+      }
+      setExamBB(currentPeriodExam.beratBadan ? String(currentPeriodExam.beratBadan) : "");
+      setExamTB(currentPeriodExam.tinggiBadan ? String(currentPeriodExam.tinggiBadan) : "");
+      setExamSistol(currentPeriodExam.tekananDarahSistol ? String(currentPeriodExam.tekananDarahSistol) : "");
+      setExamDiastol(currentPeriodExam.tekananDarahDiastol ? String(currentPeriodExam.tekananDarahDiastol) : "");
+      setExamGds(currentPeriodExam.gulaDarahSewaktu ? String(currentPeriodExam.gulaDarahSewaktu) : "");
+      setExamLp(currentPeriodExam.lingkarPerut ? String(currentPeriodExam.lingkarPerut) : "");
+      setExamCholesterol(currentPeriodExam.kolesterol ? String(currentPeriodExam.kolesterol) : "");
+      setExamUricAcid(currentPeriodExam.asamUrat ? String(currentPeriodExam.asamUrat) : "");
+      setExamKeluhan(currentPeriodExam.keluhan || "");
+      setExamTindakan(currentPeriodExam.tindakan || "");
+      loadedLansiaIdRef.current = activeLansia.id;
+      return;
+    }
+
+    // 2. Jika belum diperiksa, cek draft tersimpan khusus lansia ini
     const draft = getExamDraft(posyanduId, activeLansia.id);
     const draftDate = draft?.examDate ? new Date(draft.examDate) : null;
     const isDraftForCurrentPeriod = draftDate
@@ -736,33 +763,19 @@ export default function LansiaModule({ posyanduId, activePeriode, searchQuery = 
       setExamUricAcid(draft.examUricAcid ?? "");
       setExamKeluhan(draft.examKeluhan ?? "");
       setExamTindakan(draft.examTindakan ?? "");
+      loadedLansiaIdRef.current = activeLansia.id;
       return;
     }
 
-    if (currentPeriodExam) {
-      if (currentPeriodExam.tanggalPeriksa) {
-        setExamDate(formatTanggalInput(currentPeriodExam.tanggalPeriksa));
-      }
-      setExamBB(currentPeriodExam.beratBadan ? String(currentPeriodExam.beratBadan) : "");
-      setExamTB(currentPeriodExam.tinggiBadan ? String(currentPeriodExam.tinggiBadan) : "");
-      setExamSistol(currentPeriodExam.tekananDarahSistol ? String(currentPeriodExam.tekananDarahSistol) : "");
-      setExamDiastol(currentPeriodExam.tekananDarahDiastol ? String(currentPeriodExam.tekananDarahDiastol) : "");
-      setExamGds(currentPeriodExam.gulaDarahSewaktu ? String(currentPeriodExam.gulaDarahSewaktu) : "");
-      setExamLp(currentPeriodExam.lingkarPerut ? String(currentPeriodExam.lingkarPerut) : "");
-      setExamCholesterol(currentPeriodExam.kolesterol ? String(currentPeriodExam.kolesterol) : "");
-      setExamUricAcid(currentPeriodExam.asamUrat ? String(currentPeriodExam.asamUrat) : "");
-      setExamKeluhan(currentPeriodExam.keluhan || "");
-      setExamTindakan(currentPeriodExam.tindakan || "");
-    } else {
-      // Periode baru belum ada data periksa -> form KOSONG
-      const defaultDate = activePeriode?.tanggal 
-        ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
-        : new Date().toISOString().slice(0, 10);
-      setExamDate(defaultDate);
-      setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
-      setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
-      setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
-    }
+    // 3. Periode baru belum ada data periksa -> form KOSONG
+    const defaultDate = activePeriode?.tanggal 
+      ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
+      : new Date().toISOString().slice(0, 10);
+    setExamDate(defaultDate);
+    setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
+    setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
+    setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
+    loadedLansiaIdRef.current = activeLansia.id;
   }, [activeLansia, activePeriode, currentPeriodExam, posyanduId, targetMonth, targetYear]);
 
   return (

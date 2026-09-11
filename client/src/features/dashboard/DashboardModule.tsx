@@ -43,6 +43,7 @@ import {
 import ActionMenu from "../../components/ActionMenu";
 import LansiaIcon from "../../components/LansiaIcon";
 import BalitaIcon from "../../components/BalitaIcon";
+import toast from "react-hot-toast";
 import { hitungStatusBbU, hitungStatusTbU, hitungStatusBbTb, hitungIMT } from "../../lib/zScoreCalculator";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -419,7 +420,6 @@ export default function DashboardModule({ searchQuery, onNavigate, posyanduId, a
   // Warning & Success State
   const [modalError, setModalError] = useState("");
   const [modalWarning, setModalWarning] = useState("");
-  const [toastSuccess, setToastSuccess] = useState("");
 
   // Filter Kunjungan
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -526,7 +526,7 @@ export default function DashboardModule({ searchQuery, onNavigate, posyanduId, a
         await lansiaApi.createPemeriksaan(posyanduId, selectedPasien.id, data);
       }
 
-      setToastSuccess(`Pemeriksaan untuk ${selectedPasien.nama} berhasil dicatat.`);
+      toast.success(`Pemeriksaan untuk ${selectedPasien.nama} berhasil dicatat.`);
       fetchSummary();
       fetchAktivitas();
 
@@ -551,10 +551,10 @@ export default function DashboardModule({ searchQuery, onNavigate, posyanduId, a
       setExamCacing(false);
       setExamImunisasi("");
       setModalWarning("");
-
-      setTimeout(() => setToastSuccess(""), 4000);
     } catch (err: any) {
-      setModalError(err.message || "Gagal menyimpan pemeriksaan.");
+      const msg = err.message || "Gagal menyimpan pemeriksaan.";
+      setModalError(msg);
+      toast.error(msg);
     }
   };
 
@@ -568,13 +568,6 @@ export default function DashboardModule({ searchQuery, onNavigate, posyanduId, a
         title="Dashboard Overview"
         description="Ringkasan statistik data balita, lansia, dan grafik status gizi Posyandu."
       />
-      {/* Toast Success Alert */}
-      {toastSuccess && (
-        <div className="fixed bottom-6 right-6 z-50 p-4 bg-green-50 text-trend-successText border border-green-150 rounded-card shadow-lg flex items-center gap-2.5">
-          <UserCheck2 className="w-5 h-5 text-green-600 shrink-0" />
-          <span className="text-xs font-bold">{toastSuccess}</span>
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-hairline pb-4 sm:pb-6">
