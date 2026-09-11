@@ -7,6 +7,7 @@ import { TableSkeleton } from "../../components/Skeleton";
 import LansiaIcon from "../../components/LansiaIcon";
 import { lansiaApi } from "../../lib/api";
 import { formatTanggalIndonesia, formatTanggalInput } from "../../lib/dateUtils";
+import { getExamDraft, saveExamDraft, clearExamDraft } from "../../lib/draftStorage";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   ArrowLeft,
@@ -123,11 +124,35 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
     if (selectedId) {
       setSelectedLansiaId(selectedId);
       setView("detail");
+      if (posyanduId) {
+        lansiaApi.getById(posyanduId, selectedId).then((res) => {
+          if (res.success && res.data) {
+            const l = res.data;
+            const mappedSingle: Lansia = {
+              ...l,
+              tanggalLahir: typeof l.tanggalLahir === "string" ? l.tanggalLahir.split("T")[0] : new Date(l.tanggalLahir).toISOString().split("T")[0],
+              pemeriksaan: (l.pemeriksaans ?? []).map((p: any) => ({
+                ...p,
+                tanggalPeriksa: typeof p.tanggalPeriksa === "string" ? p.tanggalPeriksa.split("T")[0] : new Date(p.tanggalPeriksa).toISOString().split("T")[0],
+              })),
+            };
+            setLansias((prev) => {
+              const idx = prev.findIndex((item) => item.id === l.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = mappedSingle;
+                return next;
+              }
+              return [mappedSingle, ...prev];
+            });
+          }
+        }).catch((err) => console.error("Gagal mengambil detail lansia:", err));
+      }
     } else {
       setSelectedLansiaId(null);
       setView("list");
     }
-  }, [selectedId]);
+  }, [selectedId, posyanduId]);
   const [ageFilter, setAgeFilter] = useState<"semua" | "45-59" | "60-69" | "70+">("semua");
   const [diseaseFilter, setDiseaseFilter] = useState<"semua" | "ht" | "dm">("semua");
   const [currentPage, setCurrentPage] = useState(1);
@@ -263,8 +288,39 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
   const [examTindakan, setExamTindakan] = useState("");
   const [examWarning, setExamWarning] = useState("");
   const [examError, setExamError] = useState("");
-
   const activeLansia = lansias.find((l) => l.id === selectedLansiaId);
+
+  // Auto-save form draft for selected lansia ke shared storage
+  useEffect(() => {
+    if (!selectedLansiaId) return;
+    saveExamDraft(posyanduId, selectedLansiaId, {
+      examDate,
+      examBB,
+      examTB,
+      examSistol,
+      examDiastol,
+      examGds,
+      examLp,
+      examCholesterol,
+      examUricAcid,
+      examKeluhan,
+      examTindakan,
+    });
+  }, [
+    posyanduId,
+    selectedLansiaId,
+    examDate,
+    examBB,
+    examTB,
+    examSistol,
+    examDiastol,
+    examGds,
+    examLp,
+    examCholesterol,
+    examUricAcid,
+    examKeluhan,
+    examTindakan,
+  ]);
 
   // Populate Edit Lansia
   const openEditModal = (l: Lansia) => {
@@ -593,6 +649,7 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
         };
         setLansias((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       }
+      clearExamDraft(posyanduId, activeLansia.id);
       setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
       setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
       setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
@@ -603,12 +660,43 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
     }
   };
 
-  // Pre-fill form pemeriksaan jika lansia sudah memiliki data pemeriksaan
+  // Pre-fill form pemeriksaan jika lansia sudah memiliki data pemeriksaan atau draft tersimpan
   useEffect(() => {
     if (!activeLansia) {
       setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
       setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
       setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
+      return;
+    }
+
+    const draft = getExamDraft(posyanduId, activeLansia.id);
+    const hasDraftContent = Boolean(
+      draft && (
+        draft.examBB ||
+        draft.examTB ||
+        draft.examSistol ||
+        draft.examDiastol ||
+        draft.examGds ||
+        draft.examLp ||
+        draft.examCholesterol ||
+        draft.examUricAcid ||
+        draft.examKeluhan ||
+        draft.examTindakan
+      )
+    );
+
+    if (hasDraftContent && draft) {
+      if (draft.examDate) setExamDate(draft.examDate);
+      setExamBB(draft.examBB ?? "");
+      setExamTB(draft.examTB ?? "");
+      setExamSistol(draft.examSistol ?? "");
+      setExamDiastol(draft.examDiastol ?? "");
+      setExamGds(draft.examGds ?? "");
+      setExamLp(draft.examLp ?? "");
+      setExamCholesterol(draft.examCholesterol ?? "");
+      setExamUricAcid(draft.examUricAcid ?? "");
+      setExamKeluhan(draft.examKeluhan ?? "");
+      setExamTindakan(draft.examTindakan ?? "");
       return;
     }
 
@@ -632,7 +720,7 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
       setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
       setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
     }
-  }, [activeLansia]);
+  }, [activeLansia, posyanduId]);
 
   return (
     <div className="space-y-6">

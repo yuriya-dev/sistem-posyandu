@@ -128,6 +128,28 @@ export const lansiaService = {
   ) {
     const lansia = await prisma.lansia.findUnique({ where: { id: lansiaId } });
     if (!lansia) throw new Error('Lansia tidak ditemukan');
+    const periksaDate = new Date(data.tanggalPeriksa);
+    const startOfMonth = new Date(Date.UTC(periksaDate.getUTCFullYear(), periksaDate.getUTCMonth(), 1));
+    const endOfMonth = new Date(Date.UTC(periksaDate.getUTCFullYear(), periksaDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+
+    const existingExam = await prisma.pemeriksaanLansia.findFirst({
+      where: {
+        lansiaId,
+        tanggalPeriksa: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingExam) {
+      return prisma.pemeriksaanLansia.update({
+        where: { id: existingExam.id },
+        data,
+      });
+    }
+
     return prisma.pemeriksaanLansia.create({ data: { ...data, lansiaId } });
   },
 

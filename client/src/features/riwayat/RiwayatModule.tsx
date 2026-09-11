@@ -1128,7 +1128,7 @@ export default function RiwayatModule({ posyanduId, activePeriode, onNavigate }:
                 <div>
                   <input
                     type="text"
-                    placeholder="Imunisasi..."
+                    placeholder="Pemberian Lain / Imunisasi..."
                     value={bImunisasi}
                     onChange={(e) => setBImunisasi(e.target.value)}
                     className="w-full p-2 bg-gray-50 border border-gray-150 rounded-input text-xs font-semibold focus:outline-none focus:border-saas-primary"

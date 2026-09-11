@@ -51,6 +51,33 @@ interface RekapanLansia {
   rataRataGds: number;
 }
 
+function extractPemberianLain(statusImunisasi?: string | null): string {
+  if (!statusImunisasi || !statusImunisasi.trim()) return "-";
+
+  if (/Pemberian:/i.test(statusImunisasi)) {
+    const matches = [...statusImunisasi.matchAll(/Pemberian:\s*([^|]+)/gi)];
+    if (matches.length > 0) {
+      const items = new Set<string>();
+      for (const m of matches) {
+        m[1].split(",").forEach((s: string) => {
+          const trimmed = s.trim();
+          if (trimmed) items.add(trimmed);
+        });
+      }
+      return items.size > 0 ? Array.from(items).join(", ") : "-";
+    }
+  }
+
+  const clean = statusImunisasi
+    .replace(/\|\s*Pemberian:\s*/gi, "")
+    .replace(/^Pemberian:\s*/gi, "")
+    .replace(/^\|\s*/, "")
+    .replace(/\s*\|$/, "")
+    .trim();
+
+  return clean || "-";
+}
+
 export default function LaporanModule({ posyanduId, onNavigate }: LaporanModuleProps) {
   const [logs, setLogs] = useState<ItemRiwayat[]>([]);
   const [filterMonth, setFilterMonth] = useState<string>("");
@@ -775,7 +802,7 @@ export default function LaporanModule({ posyanduId, onNavigate }: LaporanModuleP
                     <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">BB/TB</th>
                     <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">LK (cm)</th>
                     <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">LiLA (cm)</th>
-                    <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">Status KMS</th>
+                    <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">Pemberian Lain</th>
                     <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">B1</th>
                     <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">B6</th>
                     <th className="px-2.5 py-2.5 text-left font-bold text-gray-700 whitespace-nowrap">ASI SKS</th>
@@ -869,7 +896,7 @@ export default function LaporanModule({ posyanduId, onNavigate }: LaporanModuleP
                             </td>
                             <td className="px-2.5 py-2 text-gray-600 whitespace-nowrap">{log.lingkarKepala ?? "-"}</td>
                             <td className="px-2.5 py-2 text-gray-600 whitespace-nowrap">{log.lingkarLengan ?? "-"}</td>
-                            <td className="px-2.5 py-2 text-gray-900 font-bold whitespace-nowrap">{log.statusKms || "-"}</td>
+                            <td className="px-2.5 py-2 text-gray-900 font-medium whitespace-nowrap">{extractPemberianLain(log.statusImunisasi)}</td>
                             <td className="px-2.5 py-2 text-gray-600 whitespace-nowrap">{log.vitB1 ? "Ya" : "Tdk"}</td>
                             <td className="px-2.5 py-2 text-gray-600 whitespace-nowrap">{log.vitB6 ? "Ya" : "Tdk"}</td>
                             <td className="px-2.5 py-2 text-gray-600 whitespace-nowrap">{log.asiEksklusif ? "Ya" : "Tdk"}</td>

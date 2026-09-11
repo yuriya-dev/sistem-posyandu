@@ -33,6 +33,7 @@ import {
 } from "recharts";
 import { hitungStatusBbU, hitungStatusTbU, hitungStatusBbTb, convertStatusBbUToCode, convertStatusTbUToCode, convertStatusBbTbToCode } from "../../lib/zScoreCalculator";
 import { formatTanggalIndonesia, formatTanggalInput } from "../../lib/dateUtils";
+import { getExamDraft, saveExamDraft, clearExamDraft } from "../../lib/draftStorage";
 import { useAuth } from "../../contexts/AuthContext";
 
 // Tipe Data
@@ -169,6 +170,33 @@ interface BalitaModuleProps {
   backLabel?: string;
 }
 
+function extractPemberianLain(statusImunisasi?: string | null): string {
+  if (!statusImunisasi || !statusImunisasi.trim()) return "-";
+
+  if (/Pemberian:/i.test(statusImunisasi)) {
+    const matches = [...statusImunisasi.matchAll(/Pemberian:\s*([^|]+)/gi)];
+    if (matches.length > 0) {
+      const items = new Set<string>();
+      for (const m of matches) {
+        m[1].split(",").forEach((s: string) => {
+          const trimmed = s.trim();
+          if (trimmed) items.add(trimmed);
+        });
+      }
+      return items.size > 0 ? Array.from(items).join(", ") : "-";
+    }
+  }
+
+  const clean = statusImunisasi
+    .replace(/\|\s*Pemberian:\s*/gi, "")
+    .replace(/^Pemberian:\s*/gi, "")
+    .replace(/^\|\s*/, "")
+    .replace(/\s*\|$/, "")
+    .trim();
+
+  return clean || "-";
+}
+
 export default function BalitaModule({ posyanduId, onNavigateToPelayanan, selectedId, searchQuery, onBack, backLabel }: BalitaModuleProps) {
   const { user } = useAuth();
   const [balitas, setBalitas] = useState<Balita[]>([]);
@@ -200,11 +228,38 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
     if (selectedId) {
       setSelectedBalitaId(selectedId);
       setView("detail");
+      if (posyanduId) {
+        balitaApi.getById(posyanduId, selectedId).then((res) => {
+          if (res.success && res.data) {
+            const b = res.data;
+            const mappedSingle: Balita = {
+              ...b,
+              tanggalLahir: typeof b.tanggalLahir === "string" ? b.tanggalLahir.split("T")[0] : new Date(b.tanggalLahir).toISOString().split("T")[0],
+              pemeriksaan: (b.pemeriksaans ?? []).map((p) => ({
+                ...p,
+                tanggalPeriksa: typeof p.tanggalPeriksa === "string" ? p.tanggalPeriksa.split("T")[0] : new Date(p.tanggalPeriksa).toISOString().split("T")[0],
+                statusBBU: (p as unknown as Record<string, string>).statusBbU as PemeriksaanBalita["statusBBU"] ?? "Normal",
+                statusTBU: (p as unknown as Record<string, string>).statusTbU as PemeriksaanBalita["statusTBU"] ?? "Normal",
+                statusBBTB: (p as unknown as Record<string, string>).statusBbTb as PemeriksaanBalita["statusBBTB"] ?? "Normal",
+              })),
+            };
+            setBalitas((prev) => {
+              const idx = prev.findIndex((item) => item.id === b.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = mappedSingle;
+                return next;
+              }
+              return [mappedSingle, ...prev];
+            });
+          }
+        }).catch((err) => console.error("Gagal mengambil detail balita:", err));
+      }
     } else {
       setSelectedBalitaId(null);
       setView("list");
     }
-  }, [selectedId]);
+  }, [selectedId, posyanduId]);
 
   // Edit & Delete Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -403,30 +458,26 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
     checkedPemberianMap?: Record<string, boolean>;
   }
 
-  const [draftsMap, setDraftsMap] = useState<Record<string, FormDraftBalita>>({});
-
-  // Auto-save form draft for selected balita
+  // Auto-save form draft for selected balita ke shared storage
   useEffect(() => {
     if (!selectedBalitaId) return;
-    setDraftsMap((prev) => ({
-      ...prev,
-      [selectedBalitaId]: {
-        examDate,
-        examBB,
-        examTB,
-        examLK,
-        examLiLA,
-        examKms,
-        examVitA,
-        examVitB1,
-        examVitB6,
-        examAsi,
-        examCacing,
-        examImunisasi,
-        checkedPemberianMap,
-      },
-    }));
+    saveExamDraft(posyanduId, selectedBalitaId, {
+      examDate,
+      examBB,
+      examTB,
+      examLK,
+      examLiLA,
+      examKms,
+      examVitA,
+      examVitB1,
+      examVitB6,
+      examAsi,
+      examCacing,
+      examImunisasi,
+      checkedPemberianMap,
+    });
   }, [
+    posyanduId,
     selectedBalitaId,
     examDate,
     examBB,
@@ -810,11 +861,7 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
         setBalitas((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       }
       
-      setDraftsMap((prev) => {
-        const next = { ...prev };
-        delete next[activeBalita.id];
-        return next;
-      });
+      clearExamDraft(posyanduId, activeBalita.id);
 
       // Emit event to notify Riwayat module to refresh
       window.dispatchEvent(new Event("pemeriksaanSaved"));
@@ -833,8 +880,19 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
   useEffect(() => {
     if (!activeBalita) return;
 
-    const draft = draftsMap[activeBalita.id];
-    if (draft) {
+    const draft = getExamDraft(posyanduId, activeBalita.id);
+    const hasDraftContent = Boolean(
+      draft && (
+        draft.examBB ||
+        draft.examTB ||
+        draft.examLK ||
+        draft.examLiLA ||
+        draft.examImunisasi ||
+        (draft.checkedPemberianMap && Object.values(draft.checkedPemberianMap).some(Boolean))
+      )
+    );
+
+    if (hasDraftContent && draft) {
       if (draft.examDate) setExamDate(draft.examDate);
       setExamBB(draft.examBB ?? "");
       setExamTB(draft.examTB ?? "");
@@ -866,8 +924,41 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
       setExamVitB6(Boolean((latest as any).vitB6));
       setExamAsi(Boolean(latest.asiEksklusif));
       setExamCacing(Boolean(latest.obatCacing));
-      setExamImunisasi(latest.statusImunisasi || "");
-      setCheckedPemberianMap({});
+      const rawImun = latest.statusImunisasi || "";
+      const matches = [...rawImun.matchAll(/Pemberian:\s*([^|]+)/gi)];
+      const newChecked: Record<string, boolean> = {};
+      const itemsFound: string[] = [];
+      for (const m of matches) {
+        m[1].split(',').forEach((s: string) => {
+          const t = s.trim();
+          if (t) {
+            newChecked[t] = true;
+            itemsFound.push(t);
+          }
+        });
+      }
+      setCheckedPemberianMap(newChecked);
+
+      if (itemsFound.length > 0) {
+        setMasterPemberianOptions((prev) => {
+          const lowerSet = new Set(prev.map(p => p.toLowerCase()));
+          const toAdd = itemsFound.filter(item => !lowerSet.has(item.toLowerCase()));
+          if (toAdd.length === 0) return prev;
+          const next = [...prev, ...toAdd];
+          if (posyanduId) {
+            try {
+              localStorage.setItem(`posyandu_pemberian_options_${posyanduId}`, JSON.stringify(next));
+            } catch (e) {}
+          }
+          return next;
+        });
+      }
+
+      const pureImunisasi = rawImun
+        .replace(/(^|\|\s*)Pemberian:.*$/gi, "")
+        .replace(/\|\s*$/, "")
+        .trim();
+      setExamImunisasi(pureImunisasi);
     } else {
       setExamBB("");
       setExamTB("");
@@ -1618,11 +1709,10 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
                     <th className="pb-3">BB/U</th>
                     <th className="pb-3">TB/U</th>
                     <th className="pb-3">BB/TB</th>
-                    <th className="pb-3">KMS</th>
                     <th className="pb-3">Vit A</th>
                     <th className="pb-3">ASI Eksk.</th>
                     <th className="pb-3">Obat Cacing</th>
-                    <th className="pb-3">Imunisasi</th>
+                    <th className="pb-3">Pemberian Lain</th>
                     <th className="pb-3 text-right">Aksi</th>
                   </tr>
                 </thead>
@@ -1669,11 +1759,10 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
                             {exam.statusBBTB}
                           </span>
                         </td>
-                        <td className="py-4 font-bold text-teal-600">{exam.statusKms || "-"}</td>
                         <td className="py-4 font-semibold text-saas-muted">{exam.vitaminA ? "Ya" : "Tidak"}</td>
                         <td className="py-4 font-semibold text-saas-muted">{exam.asiEksklusif ? "Ya" : "Tidak"}</td>
                         <td className="py-4 font-semibold text-saas-muted">{exam.obatCacing ? "Ya" : "Tidak"}</td>
-                        <td className="py-4 font-semibold text-saas-muted">{exam.statusImunisasi || "-"}</td>
+                        <td className="py-4 font-semibold text-saas-muted">{extractPemberianLain(exam.statusImunisasi)}</td>
                         <td className="py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button

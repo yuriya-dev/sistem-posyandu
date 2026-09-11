@@ -17,7 +17,8 @@ import {
   Edit2,
   Trash2,
   User,
-  MoreHorizontal
+  MoreHorizontal,
+  CheckCircle2
 } from "lucide-react";
 import ActionMenu from "../../components/ActionMenu";
 import { hitungStatusBbU, hitungStatusTbU, hitungStatusBbTb, hitungIMT, convertStatusBbUToCode, convertStatusTbUToCode, convertStatusBbTbToCode } from "../../lib/zScoreCalculator";
@@ -27,6 +28,7 @@ import { useAuth } from "../../contexts/AuthContext";
 // Reusable Modal Component
 import Modal from "../../components/Modal";
 import PageHelmet from "../../components/PageHelmet";
+import { getExamDraft, saveExamDraft, clearExamDraft, getActivePatientId, setActivePatientId, FormExamDraft } from "../../lib/draftStorage";
 import { PelayananSkeleton } from "../../components/Skeleton";
 import LansiaIcon from "../../components/LansiaIcon";
 import BalitaIcon from "../../components/BalitaIcon";
@@ -128,6 +130,10 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
   const [activeTab, setActiveTab] = useState<"Balita" | "Lansia">("Balita");
   const formRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    setActivePatientId(posyanduId, selectedPasien ? selectedPasien.id : null);
+  }, [selectedPasien, posyanduId]);
+
   const handleEditSessionLog = (log: SessionLog) => {
     const target = pasiens.find(
       (p) => (log.pasienId && p.id === log.pasienId) || (p.nama === log.nama && p.tipe === log.tipe)
@@ -212,10 +218,41 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
     const targetYear = activePeriode ? activePeriode.tahun : new Date().getFullYear();
 
     Promise.all([
-      balitaApi.getAll(posyanduId),
-      lansiaApi.getAll(posyanduId)
+      balitaApi.getAll(posyanduId, { limit: 1000 }),
+      lansiaApi.getAll(posyanduId, { limit: 1000 })
     ])
       .then(([balitaRes, lansiaRes]) => {
+        // Kumpulkan semua opsi pemberian yang pernah ada di posyandu
+        const gatheredCustoms = new Set<string>();
+        (balitaRes.data || []).forEach((b: Balita) => {
+          (b.pemeriksaans || []).forEach((exam) => {
+            if (exam.statusImunisasi) {
+              const matches = [...exam.statusImunisasi.matchAll(/Pemberian:\s*([^|]+)/gi)];
+              for (const m of matches) {
+                m[1].split(',').forEach((s: string) => {
+                  const t = s.trim();
+                  if (t) gatheredCustoms.add(t);
+                });
+              }
+            }
+          });
+        });
+
+        if (gatheredCustoms.size > 0) {
+          setMasterPemberianOptions(prev => {
+            const lowerSet = new Set(prev.map(p => p.toLowerCase()));
+            const toAdd = Array.from(gatheredCustoms).filter(item => !lowerSet.has(item.toLowerCase()));
+            if (toAdd.length === 0) return prev;
+            const next = [...prev, ...toAdd];
+            if (posyanduId) {
+              try {
+                localStorage.setItem(`posyandu_pemberian_options_${posyanduId}`, JSON.stringify(next));
+              } catch (e) {}
+            }
+            return next;
+          });
+        }
+
         const balitas: Pasien[] = (balitaRes.data || []).map((b: Balita) => {
           const currentExam = (b.pemeriksaans || []).find((exam) => {
             const d = new Date(exam.tanggalPeriksa);
@@ -258,6 +295,15 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
 
         const allPasiens = [...balitas, ...lansias];
         setPasiens(allPasiens);
+
+        // Restore selected patient jika sebelumnya ada pasien aktif yang tersimpan
+        setSelectedPasien((prev) => {
+          const activeId = prev?.id || getActivePatientId(posyanduId);
+          if (activeId) {
+            return allPasiens.find((p) => p.id === activeId) || prev || null;
+          }
+          return null;
+        });
 
         // Populate sessionLogs untuk menampilkan seluruh pemeriksaan pada Periode Pelayanan Aktif
         const periodLogs: SessionLog[] = [];
@@ -377,12 +423,13 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
   const handleAddCustomPemberian = () => {
     const trimmed = newPemberianInput.trim();
     if (!trimmed) return;
-    const exists = masterPemberianOptions.some(opt => opt.toLowerCase() === trimmed.toLowerCase());
-    if (!exists) {
+    const existing = masterPemberianOptions.find(opt => opt.toLowerCase() === trimmed.toLowerCase());
+    const finalKey = existing || trimmed;
+    if (!existing) {
       const updated = [...masterPemberianOptions, trimmed];
       updateMasterPemberianOptions(updated);
     }
-    setCheckedPemberianMap(prev => ({ ...prev, [trimmed]: true }));
+    setCheckedPemberianMap(prev => ({ ...prev, [finalKey]: true }));
     setNewPemberianInput("");
     setShowAddPemberianInput(false);
   };
@@ -431,39 +478,35 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
     examTindakan?: string;
   }
 
-  const [draftsMap, setDraftsMap] = useState<Record<string, FormDraft>>({});
-
-  // Auto-save form draft for active patient
+  // Auto-save form draft for active patient ke shared storage
   useEffect(() => {
     if (!selectedPasien?.id) return;
-    setDraftsMap((prev) => ({
-      ...prev,
-      [selectedPasien.id]: {
-        examDate,
-        examBB,
-        examTB,
-        examLK,
-        examLiLA,
-        examKms,
-        examVitA,
-        examVitB1,
-        examVitB6,
-        examAsi,
-        examCacing,
-        examImunisasi,
-        checkedPemberianMap,
-        examSistol,
-        examDiastol,
-        examGds,
-        examLp,
-        examCholesterol,
-        examUricAcid,
-        examKeluhan,
-        examTindakan,
-      },
-    }));
+    saveExamDraft(posyanduId, selectedPasien.id, {
+      examDate,
+      examBB,
+      examTB,
+      examLK,
+      examLiLA,
+      examKms,
+      examVitA,
+      examVitB1,
+      examVitB6,
+      examAsi,
+      examCacing,
+      examImunisasi,
+      checkedPemberianMap,
+      examSistol,
+      examDiastol,
+      examGds,
+      examLp,
+      examCholesterol,
+      examUricAcid,
+      examKeluhan,
+      examTindakan,
+    });
   }, [
     selectedPasien?.id,
+    posyanduId,
     examDate,
     examBB,
     examTB,
@@ -491,8 +534,27 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
   useEffect(() => {
     if (!selectedPasien) return;
 
-    const draft = draftsMap[selectedPasien.id];
-    if (draft) {
+    const draft = getExamDraft(posyanduId, selectedPasien.id);
+    const hasDraftContent = Boolean(
+      draft && (
+        draft.examBB ||
+        draft.examTB ||
+        draft.examLK ||
+        draft.examLiLA ||
+        draft.examSistol ||
+        draft.examDiastol ||
+        draft.examGds ||
+        draft.examLp ||
+        draft.examCholesterol ||
+        draft.examUricAcid ||
+        draft.examKeluhan ||
+        draft.examTindakan ||
+        draft.examImunisasi ||
+        (draft.checkedPemberianMap && Object.values(draft.checkedPemberianMap).some(Boolean))
+      )
+    );
+
+    if (hasDraftContent && draft) {
       if (draft.examDate) setExamDate(draft.examDate);
       setExamBB(draft.examBB ?? "");
       setExamTB(draft.examTB ?? "");
@@ -533,9 +595,43 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setExamVitB1(Boolean(exam.vitB1));
         setExamVitB6(Boolean(exam.vitB6));
         setExamAsi(Boolean(exam.asiEksklusif));
-        setExamCacing(Boolean(exam.obatCacing));
-        setExamImunisasi(exam.statusImunisasi || "");
-        setCheckedPemberianMap({});
+        const rawImun = exam.statusImunisasi || "";
+        const matches = [...rawImun.matchAll(/Pemberian:\s*([^|]+)/gi)];
+        const newChecked: Record<string, boolean> = {};
+        const itemsFound: string[] = [];
+        for (const m of matches) {
+          m[1].split(',').forEach((s: string) => {
+            const t = s.trim();
+            if (t) {
+              newChecked[t] = true;
+              itemsFound.push(t);
+            }
+          });
+        }
+        setCheckedPemberianMap(newChecked);
+
+        // Pastikan opsi yang ada di data pemeriksaan tersinkron ke masterPemberianOptions agar checkbox-nya tampil & tercentang
+        if (itemsFound.length > 0) {
+          setMasterPemberianOptions((prev) => {
+            const lowerSet = new Set(prev.map(p => p.toLowerCase()));
+            const toAdd = itemsFound.filter(item => !lowerSet.has(item.toLowerCase()));
+            if (toAdd.length === 0) return prev;
+            const next = [...prev, ...toAdd];
+            if (posyanduId) {
+              try {
+                localStorage.setItem(`posyandu_pemberian_options_${posyanduId}`, JSON.stringify(next));
+              } catch (e) {}
+            }
+            return next;
+          });
+        }
+
+        // Pertahankan imunisasi murni tanpa string Pemberian:
+        const pureImunisasi = rawImun
+          .replace(/(^|\|\s*)Pemberian:.*$/gi, "")
+          .replace(/\|\s*$/, "")
+          .trim();
+        setExamImunisasi(pureImunisasi);
       } else {
         setExamSistol(exam.tekananDarahSistol ? String(exam.tekananDarahSistol) : "");
         setExamDiastol(exam.tekananDarahDiastol ? String(exam.tekananDarahDiastol) : "");
@@ -662,12 +758,24 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         const usiaBulan = calculateAgeInMonths(selectedPasien.tanggalLahir || "2025-01-01", examDate);
 
         const selectedCustoms = masterPemberianOptions.filter(opt => checkedPemberianMap[opt]);
+        let cleanImunisasi = examImunisasi
+          .replace(/(^|\|\s*)Pemberian:.*$/gi, "")
+          .replace(/\|\s*$/, "")
+          .trim();
+
+        // Cegah duplikasi jika opsi pemberian sudah tercentang tapi juga diketik di input imunisasi
+        selectedCustoms.forEach((opt) => {
+          const esc = opt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          cleanImunisasi = cleanImunisasi.replace(new RegExp(`(^|[,|\\s]+)${esc}([,|\\s]+|$)`, 'gi'), '$1$2').trim();
+        });
+        cleanImunisasi = cleanImunisasi.replace(/^[,|\s]+/, '').replace(/[,|\s]+$/, '').trim();
+
         const combinedImunisasiPemberian = [
-          examImunisasi,
+          cleanImunisasi,
           selectedCustoms.length > 0 ? `Pemberian: ${selectedCustoms.join(", ")}` : ""
         ].filter(Boolean).join(" | ");
 
-        await balitaApi.createPemeriksaan(posyanduId, selectedPasien.id, {
+        const balitaPayload = {
           tanggalPeriksa: examDate,
           usiaBulan,
           beratBadan: bb,
@@ -685,9 +793,15 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
           obatCacing: examCacing,
           statusImunisasi: combinedImunisasiPemberian || undefined,
           petugas: user?.nama || "Kader Posyandu",
-        } as any);
+        };
 
-        summaryText += `${lk ? `, LK: ${lk}cm` : ""}${lila ? `, LiLA: ${lila}cm` : ""}${examVitA ? ", Vit A" : ""}${examVitB1 ? ", B1" : ""}${examVitB6 ? ", B6" : ""}${examAsi ? ", ASI: Masih" : ", ASI: Tidak"}${examCacing ? ", Obat Cacing" : ""}${selectedCustoms.length > 0 ? `, ${selectedCustoms.join(", ")}` : ""}${examImunisasi ? `, Imunisasi: ${examImunisasi}` : ""}`;
+        if (selectedPasien.currentPeriodExam?.id) {
+          await balitaApi.updatePemeriksaan(posyanduId, selectedPasien.id, selectedPasien.currentPeriodExam.id, balitaPayload as any);
+        } else {
+          await balitaApi.createPemeriksaan(posyanduId, selectedPasien.id, balitaPayload as any);
+        }
+
+        summaryText += `${lk ? `, LK: ${lk}cm` : ""}${lila ? `, LiLA: ${lila}cm` : ""}${examVitA ? ", Vit A" : ""}${examVitB1 ? ", B1" : ""}${examVitB6 ? ", B6" : ""}${examAsi ? ", ASI: Masih" : ", ASI: Tidak"}${examCacing ? ", Obat Cacing" : ""}${selectedCustoms.length > 0 ? `, ${selectedCustoms.join(", ")}` : ""}${cleanImunisasi ? `, Imunisasi: ${cleanImunisasi}` : ""}`;
         statusText = `Selesai (${examBBU})`;
       } else {
         const sis = parseInt(examSistol);
@@ -703,7 +817,7 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
           return;
         }
 
-        await lansiaApi.createPemeriksaan(posyanduId, selectedPasien.id, {
+        const lansiaPayload = {
           tanggalPeriksa: examDate,
           beratBadan: bb,
           tinggiBadan: tb,
@@ -716,7 +830,13 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
           keluhan: examKeluhan || undefined,
           tindakan: examTindakan || undefined,
           petugas: user?.nama || "Kader Posyandu",
-        } as any);
+        };
+
+        if (selectedPasien.currentPeriodExam?.id) {
+          await lansiaApi.updatePemeriksaan(posyanduId, selectedPasien.id, selectedPasien.currentPeriodExam.id, lansiaPayload as any);
+        } else {
+          await lansiaApi.createPemeriksaan(posyanduId, selectedPasien.id, lansiaPayload as any);
+        }
 
         summaryText += `, TD: ${sis}/${dia}, GDS: ${gds}, LP: ${lp}cm${kol ? `, Kolesterol: ${kol}` : ""}${urat ? `, Asam Urat: ${urat}` : ""}`;
         statusText = sis >= 140 || gds >= 200 || (kol && kol >= 200) ? "Selesai (Rawan)" : "Selesai (Normal)";
@@ -735,11 +855,7 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         status: statusText,
       };
 
-      setDraftsMap((prev) => {
-        const next = { ...prev };
-        delete next[selectedPasien.id];
-        return next;
-      });
+      clearExamDraft(posyanduId, selectedPasien.id);
 
       setSessionLogs([newLog, ...sessionLogs]);
       setSuccessToast(`Pemeriksaan bulanan untuk ${selectedPasien.nama} berhasil disimpan ke database.`);
@@ -767,6 +883,10 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
       setExamVitA(false);
       setExamVitB1(false);
       setExamVitB6(false);
+      if (selectedPasien?.id) {
+        clearExamDraft(posyanduId, selectedPasien.id);
+      }
+      setActivePatientId(posyanduId, null);
       setSelectedPasien(null);
       setFormWarning("");
 
@@ -1252,7 +1372,13 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-saas-muted uppercase tracking-wider">Warga Terpilih</span>
                     <button 
-                      onClick={() => setSelectedPasien(null)}
+                      onClick={() => {
+                        if (selectedPasien?.id) {
+                          clearExamDraft(posyanduId, selectedPasien.id);
+                        }
+                        setActivePatientId(posyanduId, null);
+                        setSelectedPasien(null);
+                      }}
                       className="text-[10px] text-trend-dangerText font-bold hover:underline"
                     >
                       Batal Pilih
@@ -1300,6 +1426,13 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
                   {formWarning && (
                     <div className="p-3 bg-yellow-50 text-yellow-700 border border-yellow-100 rounded-lg text-xs font-semibold flex gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0" /> {formWarning}
+                    </div>
+                  )}
+
+                  {selectedPasien.currentPeriodExam && (
+                    <div className="p-3 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-600" />
+                      <span>Pemeriksaan untuk periode ini sudah tercatat. Menyimpan form akan <strong>memperbarui (edit)</strong> data pemeriksaan yang ada.</span>
                     </div>
                   )}
 
@@ -1751,10 +1884,12 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
                     >
                       {isSubmitting ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : selectedPasien.currentPeriodExam ? (
+                        <Edit2 className="w-4 h-4" />
                       ) : (
                         <Plus className="w-4 h-4" />
                       )}
-                      {isSubmitting ? "Menyimpan..." : "Simpan Pemeriksaan"}
+                      {isSubmitting ? "Menyimpan..." : selectedPasien.currentPeriodExam ? "Perbarui Pemeriksaan" : "Simpan Pemeriksaan"}
                     </button>
                   </div>
                 </form>

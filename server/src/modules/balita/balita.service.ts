@@ -130,6 +130,34 @@ export const balitaService = {
     const statusTbU = hitungStatusTbU(Number(data.tinggiBadan), usiaBulan, balita.jenisKelamin);
     const statusBbTb = hitungStatusBbTb(Number(data.beratBadan), Number(data.tinggiBadan), balita.jenisKelamin);
 
+    const periksaDate = new Date(data.tanggalPeriksa);
+    const startOfMonth = new Date(Date.UTC(periksaDate.getUTCFullYear(), periksaDate.getUTCMonth(), 1));
+    const endOfMonth = new Date(Date.UTC(periksaDate.getUTCFullYear(), periksaDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+
+    const existingExam = await prisma.pemeriksaanBalita.findFirst({
+      where: {
+        balitaId,
+        tanggalPeriksa: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingExam) {
+      return prisma.pemeriksaanBalita.update({
+        where: { id: existingExam.id },
+        data: {
+          ...data,
+          statusBbU,
+          statusTbU,
+          statusBbTb,
+          usiaBulan,
+        },
+      });
+    }
+
     return prisma.pemeriksaanBalita.create({
       data: {
         ...data,
