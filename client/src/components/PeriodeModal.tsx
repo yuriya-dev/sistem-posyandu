@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Calendar, Plus, Check, AlertCircle, X, Trash2, FolderPlus } from "lucide-react";
 import { periodeApi, PeriodePelayanan } from "../lib/api";
 import Modal from "./Modal";
+import toast from "react-hot-toast";
 
 const NAMA_BULAN = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -100,6 +101,7 @@ export default function PeriodeModal({
 
       if (res.success && res.data) {
         setSuccessMsg("Periode pelayanan baru berhasil dibuka!");
+        toast.success("Periode pelayanan baru berhasil dibuka!");
         onSelectPeriode(res.data);
         onRefreshPeriode();
         setShowAddForm(false);
@@ -107,7 +109,9 @@ export default function PeriodeModal({
         setTimeout(() => setSuccessMsg(""), 3000);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "Gagal membuka periode pelayanan baru.");
+      const msg = err.message || "Gagal membuka periode pelayanan baru.";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -120,12 +124,16 @@ export default function PeriodeModal({
       if (res.success && res.data) {
         onSelectPeriode(res.data);
         onRefreshPeriode();
-        setSuccessMsg(`Periode "${p.nama}" sekarang aktif.`);
+        const msg = `Periode "${p.nama}" sekarang aktif.`;
+        setSuccessMsg(msg);
+        toast.success(msg);
         fetchPeriodes();
         setTimeout(() => setSuccessMsg(""), 3000);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "Gagal mengaktifkan periode pelayanan.");
+      const msg = err.message || "Gagal mengaktifkan periode pelayanan.";
+      setErrorMsg(msg);
+      toast.error(msg);
     }
   };
 
@@ -139,11 +147,15 @@ export default function PeriodeModal({
       await periodeApi.delete(posyanduId, deleteTarget.id);
       fetchPeriodes();
       onRefreshPeriode();
-      setSuccessMsg(`Periode "${deleteTarget.nama}" berhasil dihapus.`);
+      const msg = `Periode "${deleteTarget.nama}" berhasil dihapus.`;
+      setSuccessMsg(msg);
+      toast.success(msg);
       setDeleteTarget(null);
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err: any) {
-      setErrorMsg(err.message || "Gagal menghapus periode.");
+      const msg = err.message || "Gagal menghapus periode.";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setIsDeleting(false);
     }

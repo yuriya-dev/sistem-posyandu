@@ -35,6 +35,7 @@ import { hitungStatusBbU, hitungStatusTbU, hitungStatusBbTb, convertStatusBbUToC
 import { formatTanggalIndonesia, formatTanggalInput } from "../../lib/dateUtils";
 import { getExamDraft, saveExamDraft, clearExamDraft } from "../../lib/draftStorage";
 import { useAuth } from "../../contexts/AuthContext";
+import toast from "react-hot-toast";
 
 // Tipe Data
 export interface PemeriksaanBalita {
@@ -68,7 +69,7 @@ export interface Balita {
 }
 
 import { TableSkeleton, DetailViewSkeleton } from "../../components/Skeleton";
-import { balitaApi } from "../../lib/api";
+import { balitaApi, PeriodePelayanan } from "../../lib/api";
 
 // Initial Mock Data
 const initialBalitas: Balita[] = [
@@ -163,6 +164,7 @@ function getStatusBadgeStyle(type: 'BBU' | 'TBU' | 'BBTB', status: string) {
 
 interface BalitaModuleProps {
   posyanduId: string;
+  activePeriode?: PeriodePelayanan | null;
   onNavigateToPelayanan?: (id: string) => void;
   searchQuery?: string;
   selectedId?: string;
@@ -197,7 +199,7 @@ function extractPemberianLain(statusImunisasi?: string | null): string {
   return clean || "-";
 }
 
-export default function BalitaModule({ posyanduId, onNavigateToPelayanan, selectedId, searchQuery, onBack, backLabel }: BalitaModuleProps) {
+export default function BalitaModule({ posyanduId, activePeriode, onNavigateToPelayanan, selectedId, searchQuery, onBack, backLabel }: BalitaModuleProps) {
   const { user } = useAuth();
   const [balitas, setBalitas] = useState<Balita[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -370,7 +372,16 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
   const [formError, setFormError] = useState("");
 
   // Form State Tambah Pemeriksaan
-  const [examDate, setExamDate] = useState(new Date().toISOString().split("T")[0]);
+  const initialDate = activePeriode?.tanggal 
+    ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
+    : new Date().toISOString().slice(0, 10);
+  const [examDate, setExamDate] = useState(initialDate);
+
+  useEffect(() => {
+    if (activePeriode?.tanggal) {
+      setExamDate(new Date(activePeriode.tanggal).toISOString().slice(0, 10));
+    }
+  }, [activePeriode]);
   const [examBB, setExamBB] = useState("");
   const [examTB, setExamTB] = useState("");
   const [examLK, setExamLK] = useState("");
@@ -550,8 +561,11 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
       });
       fetchBalitas();
       setIsEditModalOpen(false);
+      toast.success("Profil balita berhasil diperbarui!");
     } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : "Gagal mengedit profil balita.");
+      const msg = err instanceof Error ? err.message : "Gagal mengedit profil balita.";
+      setEditError(msg);
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
@@ -567,8 +581,10 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
       setIsDeleteModalOpen(false);
       setSelectedBalitaId(null);
       setView("list");
+      toast.success("Data balita berhasil dihapus!");
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Gagal menghapus profil balita.");
+      const msg = err instanceof Error ? err.message : "Gagal menghapus profil balita.";
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
@@ -668,6 +684,7 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
         setBalitas((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       }
       setIsEditExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan balita berhasil diperbarui!");
     } catch {
       // Fallback local update
       setBalitas((prev) =>
@@ -699,6 +716,7 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
         })
       );
       setIsEditExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan balita berhasil diperbarui!");
     } finally {
       setIsSaving(false);
     }
@@ -724,6 +742,7 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
         setBalitas((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       }
       setIsDeleteExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan balita berhasil dihapus!");
     } catch {
       setBalitas((prev) =>
         prev.map((b) => {
@@ -735,6 +754,7 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
         })
       );
       setIsDeleteExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan balita berhasil dihapus!");
     } finally {
       setIsSaving(false);
     }
@@ -777,8 +797,11 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
       setFormNamaIbu("");
       setFormAlamat("");
       setView("list");
+      toast.success("Data balita baru berhasil ditambahkan!");
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Gagal menyimpan data.");
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan data.";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
@@ -802,6 +825,14 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
       setExamWarning(`Apakah Tinggi Badan (${tb} cm) sudah benar untuk anak usia ${usia} bulan? Mohon cek kembali inputan Ibu.`);
     }
   };
+
+  const targetMonth = activePeriode ? activePeriode.bulan : (new Date().getMonth() + 1);
+  const targetYear = activePeriode ? activePeriode.tahun : new Date().getFullYear();
+
+  const currentPeriodExam = (activeBalita?.pemeriksaan || []).find((exam) => {
+    const d = new Date(exam.tanggalPeriksa);
+    return (d.getMonth() + 1) === targetMonth && d.getFullYear() === targetYear;
+  });
 
   // Handler Submit Tambah Pemeriksaan (via API)
   const handleAddExamSubmit = async (e: React.FormEvent) => {
@@ -865,23 +896,29 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
 
       // Emit event to notify Riwayat module to refresh
       window.dispatchEvent(new Event("pemeriksaanSaved"));
-      setExamBB(""); setExamTB(""); setExamLK(""); setExamLiLA("");
-      setExamBBU("Normal"); setExamTBU("Normal"); setExamBBTB("Normal");
-      setExamVitA(false); setExamVitB1(false); setExamVitB6(false); setExamAsi(true); setExamCacing(false); setExamImunisasi(""); setCheckedPemberianMap({});
-      setExamKms("N"); setExamWarning("");
+      setExamWarning("");
+      toast.success(currentPeriodExam ? "Hasil pemeriksaan balita bulan ini berhasil diperbarui!" : "Hasil pemeriksaan balita berhasil disimpan!");
     } catch (err: unknown) {
-      setExamError(err instanceof Error ? err.message : "Gagal menyimpan pemeriksaan.");
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan pemeriksaan.";
+      setExamError(msg);
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Pre-fill form pemeriksaan jika balita sudah memiliki data pemeriksaan atau draft tersimpan
+  // Pre-fill form pemeriksaan jika balita sudah memiliki data pemeriksaan pada periode ini atau draft tersimpan
   useEffect(() => {
     if (!activeBalita) return;
 
     const draft = getExamDraft(posyanduId, activeBalita.id);
+    const draftDate = draft?.examDate ? new Date(draft.examDate) : null;
+    const isDraftForCurrentPeriod = draftDate
+      ? (draftDate.getMonth() + 1) === targetMonth && draftDate.getFullYear() === targetYear
+      : true;
+
     const hasDraftContent = Boolean(
+      isDraftForCurrentPeriod &&
       draft && (
         draft.examBB ||
         draft.examTB ||
@@ -909,22 +946,21 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
       return;
     }
 
-    const latest = activeBalita.pemeriksaan?.[0];
-    if (latest) {
-      if (latest.tanggalPeriksa) {
-        setExamDate(formatTanggalInput(latest.tanggalPeriksa));
+    if (currentPeriodExam) {
+      if (currentPeriodExam.tanggalPeriksa) {
+        setExamDate(formatTanggalInput(currentPeriodExam.tanggalPeriksa));
       }
-      setExamBB(latest.beratBadan ? String(latest.beratBadan) : "");
-      setExamTB(latest.tinggiBadan ? String(latest.tinggiBadan) : "");
-      setExamLK(latest.lingkarKepala ? String(latest.lingkarKepala) : "");
-      setExamLiLA(latest.lingkarLengan ? String(latest.lingkarLengan) : "");
-      setExamKms(latest.statusKms || "N");
-      setExamVitA(Boolean(latest.vitaminA));
-      setExamVitB1(Boolean((latest as any).vitB1));
-      setExamVitB6(Boolean((latest as any).vitB6));
-      setExamAsi(Boolean(latest.asiEksklusif));
-      setExamCacing(Boolean(latest.obatCacing));
-      const rawImun = latest.statusImunisasi || "";
+      setExamBB(currentPeriodExam.beratBadan ? String(currentPeriodExam.beratBadan) : "");
+      setExamTB(currentPeriodExam.tinggiBadan ? String(currentPeriodExam.tinggiBadan) : "");
+      setExamLK(currentPeriodExam.lingkarKepala ? String(currentPeriodExam.lingkarKepala) : "");
+      setExamLiLA(currentPeriodExam.lingkarLengan ? String(currentPeriodExam.lingkarLengan) : "");
+      setExamKms(currentPeriodExam.statusKms || "N");
+      setExamVitA(Boolean(currentPeriodExam.vitaminA));
+      setExamVitB1(Boolean((currentPeriodExam as any).vitB1));
+      setExamVitB6(Boolean((currentPeriodExam as any).vitB6));
+      setExamAsi(Boolean(currentPeriodExam.asiEksklusif));
+      setExamCacing(Boolean(currentPeriodExam.obatCacing));
+      const rawImun = currentPeriodExam.statusImunisasi || "";
       const matches = [...rawImun.matchAll(/Pemberian:\s*([^|]+)/gi)];
       const newChecked: Record<string, boolean> = {};
       const itemsFound: string[] = [];
@@ -960,6 +996,11 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
         .trim();
       setExamImunisasi(pureImunisasi);
     } else {
+      // Belum ada data pada periode ini -> form KOSONG
+      const defaultDate = activePeriode?.tanggal 
+        ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
+        : new Date().toISOString().slice(0, 10);
+      setExamDate(defaultDate);
       setExamBB("");
       setExamTB("");
       setExamLK("");
@@ -973,7 +1014,7 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
       setExamImunisasi("");
       setCheckedPemberianMap({});
     }
-  }, [activeBalita]);
+  }, [activeBalita, activePeriode, posyanduId]);
 
   return (
     <div className="space-y-6">
@@ -1213,10 +1254,10 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
           {/* Back Action Header */}
           <button
             onClick={() => {
+              setView("list");
+              setSelectedBalitaId(null);
               if (onBack) {
                 onBack();
-              } else {
-                setView("list");
               }
             }}
             className="flex items-center gap-2 text-xs font-bold text-saas-muted hover:text-saas-dark transition-colors cursor-pointer"
@@ -1302,9 +1343,20 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
 
             {/* Input Pemeriksaan Baru Bulan Ini */}
             <div className="bg-white rounded-card shadow-soft-card border border-gray-100/70 p-6 lg:col-span-2 space-y-6">
-              <div>
-                <h3 className="font-bold text-base text-saas-dark">Input Hasil Pemeriksaan Bulan Ini</h3>
-                <p className="text-xs text-saas-muted mt-0.5">Masukkan data pengukuran BB, TB, LK, dan vitamin.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-base text-saas-dark">Input Hasil Pemeriksaan Bulan Ini</h3>
+                  <p className="text-xs text-saas-muted mt-0.5">Masukkan data pengukuran BB, TB, LK, dan vitamin.</p>
+                </div>
+                {currentPeriodExam ? (
+                  <span className="self-start sm:self-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Sudah Diisi Periode Ini
+                  </span>
+                ) : (
+                  <span className="self-start sm:self-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    Belum Diisi Periode Ini
+                  </span>
+                )}
               </div>
 
               {/* Form Input */}
@@ -1604,9 +1656,9 @@ export default function BalitaModule({ posyanduId, onNavigateToPelayanan, select
                 <div className="flex justify-end pt-2">
                   <button
                     type="submit"
-                    className="px-5 py-2.5 bg-saas-primary hover:bg-teal-600 text-white text-xs font-bold rounded-input shadow-md shadow-teal-500/10 transition-all flex items-center gap-1.5"
+                    className="px-5 py-2.5 bg-saas-primary hover:bg-teal-600 text-white text-xs font-bold rounded-input shadow-md shadow-teal-500/10 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Simpan Hasil Periksa
+                    <Plus className="w-3.5 h-3.5" /> {currentPeriodExam ? "Perbarui Hasil Periksa" : "Simpan Hasil Periksa"}
                   </button>
                 </div>
               </form>

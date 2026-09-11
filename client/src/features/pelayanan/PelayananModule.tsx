@@ -28,6 +28,7 @@ import { useAuth } from "../../contexts/AuthContext";
 // Reusable Modal Component
 import Modal from "../../components/Modal";
 import PageHelmet from "../../components/PageHelmet";
+import toast from "react-hot-toast";
 import { getExamDraft, saveExamDraft, clearExamDraft, getActivePatientId, setActivePatientId, FormExamDraft } from "../../lib/draftStorage";
 import { PelayananSkeleton } from "../../components/Skeleton";
 import LansiaIcon from "../../components/LansiaIcon";
@@ -144,8 +145,10 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       }
       setSuccessToast(`Memuat data pemeriksaan ${target.nama} untuk diedit.`);
+      toast.success(`Memuat data pemeriksaan ${target.nama} untuk diedit.`);
     } else {
       setFormError(`Data pasien ${log.nama} tidak ditemukan.`);
+      toast.error(`Data pasien ${log.nama} tidak ditemukan.`);
     }
   };
 
@@ -165,10 +168,13 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         await lansiaApi.deletePemeriksaan(posyanduId, deletingLog.pasienId, deletingLog.id);
       }
       setSuccessToast(`Record pemeriksaan ${deletingLog.nama} berhasil dihapus.`);
+      toast.success(`Record pemeriksaan ${deletingLog.nama} berhasil dihapus.`);
       fetchPatients();
       setDeletingLog(null);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Gagal menghapus record.");
+      const errMsg = err instanceof Error ? err.message : "Gagal menghapus record.";
+      setFormError(errMsg);
+      toast.error(errMsg);
     } finally {
       setIsDeletingLog(false);
     }
@@ -859,6 +865,7 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
 
       setSessionLogs([newLog, ...sessionLogs]);
       setSuccessToast(`Pemeriksaan bulanan untuk ${selectedPasien.nama} berhasil disimpan ke database.`);
+      toast.success(`Pemeriksaan bulanan untuk ${selectedPasien.nama} berhasil disimpan ke database.`);
       fetchPatients();
 
       setExamBB("");
@@ -893,7 +900,9 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
       setTimeout(() => setSuccessToast(""), 4000);
     } catch (err: any) {
       console.error("Gagal menyimpan data pemeriksaan ke API:", err);
-      setFormError(err.message || "Gagal menyimpan data pemeriksaan ke database.");
+      const msg = err.message || "Gagal menyimpan data pemeriksaan ke database.";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -942,6 +951,7 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setSelectedPasien(newPasien);
         setShowAddBalitaModal(false);
         setSuccessToast(`${bNama} berhasil didaftarkan & dipilih.`);
+        toast.success(`${bNama} berhasil didaftarkan & dipilih.`);
 
         setBNama("");
         setBNik("");
@@ -952,7 +962,9 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setTimeout(() => setSuccessToast(""), 4000);
       }
     } catch (err: any) {
-      setBError(err.message || "Gagal mendaftarkan balita.");
+      const msg = err.message || "Gagal mendaftarkan balita.";
+      setBError(msg);
+      toast.error(msg);
     }
   };
 
@@ -963,11 +975,13 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
 
     if (!lNama.trim() || !lNik.trim() || !lRtRw.trim() || !lAlamat.trim()) {
       setLError("Mohon isi nama, NIK, RT/RW, dan alamat.");
+      toast.error("Mohon isi nama, NIK, RT/RW, dan alamat.");
       return;
     }
 
     if (lNik.length !== 16) {
       setLError("NIK harus tepat 16 digit angka.");
+      toast.error("NIK harus tepat 16 digit angka.");
       return;
     }
 
@@ -1004,6 +1018,7 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setSelectedPasien(newPasien);
         setShowAddLansiaModal(false);
         setSuccessToast(`Lansia ${lNama} berhasil didaftarkan & dipilih.`);
+        toast.success(`Lansia ${lNama} berhasil didaftarkan & dipilih.`);
 
         setLNama("");
         setLNik("");
@@ -1019,7 +1034,9 @@ export default function PelayananModule({ posyanduId, activePeriode, onOpenPerio
         setTimeout(() => setSuccessToast(""), 4000);
       }
     } catch (err: any) {
-      setLError(err.message || "Gagal mendaftarkan lansia.");
+      const msg = err.message || "Gagal mendaftarkan lansia.";
+      setLError(msg);
+      toast.error(msg);
     }
   };
 

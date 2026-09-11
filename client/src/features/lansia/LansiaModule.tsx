@@ -5,10 +5,11 @@ import Modal from "../../components/Modal";
 import PageHelmet from "../../components/PageHelmet";
 import { TableSkeleton } from "../../components/Skeleton";
 import LansiaIcon from "../../components/LansiaIcon";
-import { lansiaApi } from "../../lib/api";
+import { lansiaApi, PeriodePelayanan } from "../../lib/api";
 import { formatTanggalIndonesia, formatTanggalInput } from "../../lib/dateUtils";
 import { getExamDraft, saveExamDraft, clearExamDraft } from "../../lib/draftStorage";
 import { useAuth } from "../../contexts/AuthContext";
+import toast from "react-hot-toast";
 import {
   ArrowLeft,
   Plus,
@@ -87,13 +88,14 @@ function calculateAgeInYears(birthDateStr: string, refDate: Date = new Date()): 
 
 interface LansiaModuleProps {
   posyanduId: string;
+  activePeriode?: PeriodePelayanan | null;
   searchQuery?: string;
   selectedId?: string;
   onBack?: () => void;
   backLabel?: string;
 }
 
-export default function LansiaModule({ posyanduId, searchQuery = "", selectedId, onBack, backLabel }: LansiaModuleProps) {
+export default function LansiaModule({ posyanduId, activePeriode, searchQuery = "", selectedId, onBack, backLabel }: LansiaModuleProps) {
   const { user } = useAuth();
   const [lansias, setLansias] = useState<Lansia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -275,7 +277,17 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
   const [formError, setFormError] = useState("");
 
   // Form State Tambah Pemeriksaan
-  const [examDate, setExamDate] = useState(new Date().toISOString().split("T")[0]);
+  const initialDate = activePeriode?.tanggal 
+    ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
+    : new Date().toISOString().slice(0, 10);
+  const [examDate, setExamDate] = useState(initialDate);
+
+  useEffect(() => {
+    if (activePeriode?.tanggal) {
+      setExamDate(new Date(activePeriode.tanggal).toISOString().slice(0, 10));
+    }
+  }, [activePeriode]);
+
   const [examBB, setExamBB] = useState("");
   const [examTB, setExamTB] = useState("");
   const [examSistol, setExamSistol] = useState("");
@@ -289,6 +301,14 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
   const [examWarning, setExamWarning] = useState("");
   const [examError, setExamError] = useState("");
   const activeLansia = lansias.find((l) => l.id === selectedLansiaId);
+
+  const targetMonth = activePeriode ? activePeriode.bulan : (new Date().getMonth() + 1);
+  const targetYear = activePeriode ? activePeriode.tahun : new Date().getFullYear();
+
+  const currentPeriodExam = (activeLansia?.pemeriksaan || []).find((exam: any) => {
+    const d = new Date(exam.tanggalPeriksa);
+    return (d.getMonth() + 1) === targetMonth && d.getFullYear() === targetYear;
+  });
 
   // Auto-save form draft for selected lansia ke shared storage
   useEffect(() => {
@@ -369,8 +389,11 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
       });
       fetchLansias();
       setIsEditModalOpen(false);
+      toast.success("Profil lansia berhasil diperbarui!");
     } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : "Gagal mengedit data lansia.");
+      const msg = err instanceof Error ? err.message : "Gagal mengedit data lansia.";
+      setEditError(msg);
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
@@ -386,8 +409,10 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
       setIsDeleteModalOpen(false);
       setSelectedLansiaId(null);
       setView("list");
+      toast.success("Data lansia berhasil dihapus!");
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Gagal menghapus data lansia.");
+      const msg = err instanceof Error ? err.message : "Gagal menghapus data lansia.";
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
@@ -467,6 +492,7 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
         setLansias((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       }
       setIsEditExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan lansia berhasil diperbarui!");
     } catch {
       setLansias((prev) =>
         prev.map((l) => {
@@ -494,6 +520,7 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
         })
       );
       setIsEditExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan lansia berhasil diperbarui!");
     } finally {
       setIsSaving(false);
     }
@@ -518,6 +545,7 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
         setLansias((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       }
       setIsDeleteExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan lansia berhasil dihapus!");
     } catch {
       setLansias((prev) =>
         prev.map((l) => {
@@ -529,6 +557,7 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
         })
       );
       setIsDeleteExamModalOpen(false);
+      toast.success("Riwayat pemeriksaan lansia berhasil dihapus!");
     } finally {
       setIsSaving(false);
     }
@@ -579,8 +608,11 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
       setFormKemandirian("A");
       setFormMental("");
       setView("list");
+      toast.success("Data lansia baru berhasil ditambahkan!");
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Gagal menyimpan data.");
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan data.";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
@@ -650,17 +682,18 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
         setLansias((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       }
       clearExamDraft(posyanduId, activeLansia.id);
-      setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
-      setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
-      setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
+      setExamWarning("");
+      toast.success(currentPeriodExam ? "Hasil pemeriksaan lansia bulan ini berhasil diperbarui!" : "Hasil pemeriksaan lansia berhasil disimpan!");
     } catch (err: unknown) {
-      setExamError(err instanceof Error ? err.message : "Gagal menyimpan pemeriksaan.");
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan pemeriksaan.";
+      setExamError(msg);
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Pre-fill form pemeriksaan jika lansia sudah memiliki data pemeriksaan atau draft tersimpan
+  // Pre-fill form pemeriksaan jika lansia sudah memiliki data pemeriksaan pada periode ini atau draft tersimpan
   useEffect(() => {
     if (!activeLansia) {
       setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
@@ -670,7 +703,13 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
     }
 
     const draft = getExamDraft(posyanduId, activeLansia.id);
+    const draftDate = draft?.examDate ? new Date(draft.examDate) : null;
+    const isDraftForCurrentPeriod = draftDate
+      ? (draftDate.getMonth() + 1) === targetMonth && draftDate.getFullYear() === targetYear
+      : true;
+
     const hasDraftContent = Boolean(
+      isDraftForCurrentPeriod &&
       draft && (
         draft.examBB ||
         draft.examTB ||
@@ -700,27 +739,31 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
       return;
     }
 
-    const latest = activeLansia.pemeriksaan?.[0];
-    if (latest) {
-      if (latest.tanggalPeriksa) {
-        setExamDate(formatTanggalInput(latest.tanggalPeriksa));
+    if (currentPeriodExam) {
+      if (currentPeriodExam.tanggalPeriksa) {
+        setExamDate(formatTanggalInput(currentPeriodExam.tanggalPeriksa));
       }
-      setExamBB(latest.beratBadan ? String(latest.beratBadan) : "");
-      setExamTB(latest.tinggiBadan ? String(latest.tinggiBadan) : "");
-      setExamSistol(latest.tekananDarahSistol ? String(latest.tekananDarahSistol) : "");
-      setExamDiastol(latest.tekananDarahDiastol ? String(latest.tekananDarahDiastol) : "");
-      setExamGds(latest.gulaDarahSewaktu ? String(latest.gulaDarahSewaktu) : "");
-      setExamLp(latest.lingkarPerut ? String(latest.lingkarPerut) : "");
-      setExamCholesterol(latest.kolesterol ? String(latest.kolesterol) : "");
-      setExamUricAcid(latest.asamUrat ? String(latest.asamUrat) : "");
-      setExamKeluhan(latest.keluhan || "");
-      setExamTindakan(latest.tindakan || "");
+      setExamBB(currentPeriodExam.beratBadan ? String(currentPeriodExam.beratBadan) : "");
+      setExamTB(currentPeriodExam.tinggiBadan ? String(currentPeriodExam.tinggiBadan) : "");
+      setExamSistol(currentPeriodExam.tekananDarahSistol ? String(currentPeriodExam.tekananDarahSistol) : "");
+      setExamDiastol(currentPeriodExam.tekananDarahDiastol ? String(currentPeriodExam.tekananDarahDiastol) : "");
+      setExamGds(currentPeriodExam.gulaDarahSewaktu ? String(currentPeriodExam.gulaDarahSewaktu) : "");
+      setExamLp(currentPeriodExam.lingkarPerut ? String(currentPeriodExam.lingkarPerut) : "");
+      setExamCholesterol(currentPeriodExam.kolesterol ? String(currentPeriodExam.kolesterol) : "");
+      setExamUricAcid(currentPeriodExam.asamUrat ? String(currentPeriodExam.asamUrat) : "");
+      setExamKeluhan(currentPeriodExam.keluhan || "");
+      setExamTindakan(currentPeriodExam.tindakan || "");
     } else {
+      // Periode baru belum ada data periksa -> form KOSONG
+      const defaultDate = activePeriode?.tanggal 
+        ? new Date(activePeriode.tanggal).toISOString().slice(0, 10) 
+        : new Date().toISOString().slice(0, 10);
+      setExamDate(defaultDate);
       setExamBB(""); setExamTB(""); setExamSistol(""); setExamDiastol("");
       setExamGds(""); setExamLp(""); setExamCholesterol(""); setExamUricAcid("");
       setExamKeluhan(""); setExamTindakan(""); setExamWarning("");
     }
-  }, [activeLansia, posyanduId]);
+  }, [activeLansia, activePeriode, currentPeriodExam, posyanduId, targetMonth, targetYear]);
 
   return (
     <div className="space-y-6">
@@ -982,10 +1025,10 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
           {/* Back Button */}
           <button
             onClick={() => {
+              setView("list");
+              setSelectedLansiaId(null);
               if (onBack) {
                 onBack();
-              } else {
-                setView("list");
               }
             }}
             className="flex items-center gap-2 text-xs font-bold text-saas-muted hover:text-saas-dark transition-colors cursor-pointer"
@@ -1115,9 +1158,20 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
 
             {/* Input Pemeriksaan Baru */}
             <div className="bg-white rounded-card shadow-soft-card border border-gray-100/70 p-6 lg:col-span-2 space-y-6">
-              <div>
-                <h3 className="font-bold text-base text-saas-dark">Input Pemeriksaan Bulanan Lansia</h3>
-                <p className="text-xs text-saas-muted mt-0.5">Masukkan data pengukuran fisik dan skrining gula darah.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-base text-saas-dark">Input Pemeriksaan Bulanan Lansia</h3>
+                  <p className="text-xs text-saas-muted mt-0.5">Masukkan data pengukuran fisik dan skrining gula darah.</p>
+                </div>
+                {currentPeriodExam ? (
+                  <span className="self-start sm:self-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Sudah Diisi Periode Ini
+                  </span>
+                ) : (
+                  <span className="self-start sm:self-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    Belum Diisi Periode Ini
+                  </span>
+                )}
               </div>
 
               <form onSubmit={handleAddExamSubmit} className="space-y-4">
@@ -1317,9 +1371,9 @@ export default function LansiaModule({ posyanduId, searchQuery = "", selectedId,
                 <div className="flex justify-end pt-2">
                   <button
                     type="submit"
-                    className="px-5 py-2.5 bg-saas-primary hover:bg-teal-600 text-white text-xs font-bold rounded-input shadow-md shadow-teal-500/10 transition-all flex items-center gap-1.5"
+                    className="px-5 py-2.5 bg-saas-primary hover:bg-teal-600 text-white text-xs font-bold rounded-input shadow-md shadow-teal-500/10 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Simpan Hasil Periksa
+                    <Plus className="w-3.5 h-3.5" /> {currentPeriodExam ? "Perbarui Hasil Periksa" : "Simpan Hasil Periksa"}
                   </button>
                 </div>
               </form>

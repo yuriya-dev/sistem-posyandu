@@ -37,6 +37,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { notificationApi, authApi, balitaApi, lansiaApi, periodeApi, AppNotification, PeriodePelayanan } from "../lib/api";
 import PeriodeModal from "../components/PeriodeModal";
+import toast from "react-hot-toast";
 
 // Feature Modules
 import DashboardModule from "../features/dashboard/DashboardModule";
@@ -218,6 +219,7 @@ export default function Home() {
   const [showNotification, setShowNotification] = useState(false);
   const [activeMenu, setActiveMenu] = useState("Overview");
   const [navigationOrigin, setNavigationOrigin] = useState<string | null>(null);
+  const [navKey, setNavKey] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -319,14 +321,19 @@ export default function Home() {
           email: res.data.email,
         });
         setModalNotice({ type: "success", message: "Profil berhasil diperbarui!" });
+        toast.success("Profil Anda berhasil diperbarui!");
         setTimeout(() => {
           setIsEditProfileOpen(false);
         }, 1200);
       } else {
-        setModalNotice({ type: "error", message: res.message || "Gagal memperbarui profil" });
+        const msg = res.message || "Gagal memperbarui profil";
+        setModalNotice({ type: "error", message: msg });
+        toast.error(msg);
       }
     } catch (err: any) {
-      setModalNotice({ type: "error", message: err.message || "Gagal memperbarui profil" });
+      const msg = err.message || "Gagal memperbarui profil";
+      setModalNotice({ type: "error", message: msg });
+      toast.error(msg);
     } finally {
       setIsSavingProfile(false);
     }
@@ -599,6 +606,9 @@ export default function Home() {
       setActiveMenu(navigationOrigin);
       setNavigationOrigin(null);
     }
+    setSelectedBalitaId(undefined);
+    setSelectedLansiaId(undefined);
+    setNavKey((prev) => prev + 1);
   };
 
   const getBackLabel = (defaultLabel: string) => {
@@ -633,7 +643,9 @@ export default function Home() {
       case "Balita":
         return (
           <BalitaModule
+            key={`balita-${navKey}`}
             posyanduId={posyanduId}
+            activePeriode={activePeriode}
             searchQuery={searchQuery}
             selectedId={selectedBalitaId}
             onBack={handleBackFromProfile}
@@ -643,7 +655,9 @@ export default function Home() {
       case "Lansia":
         return (
           <LansiaModule
+            key={`lansia-${navKey}`}
             posyanduId={posyanduId}
+            activePeriode={activePeriode}
             searchQuery={searchQuery}
             selectedId={selectedLansiaId}
             onBack={handleBackFromProfile}
@@ -687,6 +701,7 @@ export default function Home() {
       setSelectedLansiaId(undefined);
     }
     setActiveMenu(menuName);
+    setNavKey((prev) => prev + 1);
     setIsMobileMenuOpen(false);
     setShowNotification(false);
     setShowProfileMenu(false);
