@@ -1,5 +1,10 @@
 import { ItemRiwayat } from "@/lib/api";
 import { RekapanBalita, RekapanLansia, LansiaPerluPerhatian } from "../types";
+import {
+  normalizeStatusBbUCode,
+  normalizeStatusTbUCode,
+  normalizeStatusBbTbCode,
+} from "@/lib/zScoreCalculator";
 
 export function formatPeriodeText(filterMonth?: string, filterYear?: string): string {
   if (filterMonth) {
@@ -66,6 +71,12 @@ export function calculateRekapanBalita(
 
   const attentionList: RekapanBalita["balitaPerluPerhatianList"] = [];
 
+  const countsBbU = { normal: 0, kurang: 0, sangatKurang: 0, lebih: 0 };
+  const countsTbU = { normal: 0, pendek: 0, sangatPendek: 0, tinggi: 0 };
+  const countsBbTb = { normal: 0, kurang: 0, sangatKurang: 0, lebih: 0 };
+  let stuntingCount = 0;
+  let wastingCount = 0;
+
   balitaLogs.forEach((l) => {
     let usiaBln = l.usiaBulan !== undefined && l.usiaBulan >= 0 ? l.usiaBulan : -1;
     if (usiaBln < 0 && l.tanggalLahir) {
@@ -94,32 +105,62 @@ export function calculateRekapanBalita(
       if (l.asiEksklusif) asiEksklusifCount++;
     }
 
+    // Normalisasi kode status antropometri (termasuk fallback hitung dari BB, TB, Usia jika belum ada)
+    const rawBbU = l.statusBbU || (l as any).statusBBU;
+    const rawTbU = l.statusTbU || (l as any).statusTBU;
+    const rawBbTb = l.statusBbTb || (l as any).statusBBTB;
+
+    const codeBbU = normalizeStatusBbUCode(rawBbU, l.beratBadan, usiaBln, l.jenisKelamin);
+    const codeTbU = normalizeStatusTbUCode(rawTbU, l.tinggiBadan, usiaBln, l.jenisKelamin);
+    const codeBbTb = normalizeStatusBbTbCode(rawBbTb, l.beratBadan, l.tinggiBadan, l.jenisKelamin);
+
+    // Hitung distribusi BB/U
+    if (codeBbU === "N") countsBbU.normal++;
+    else if (codeBbU === "K") countsBbU.kurang++;
+    else if (codeBbU === "SK") countsBbU.sangatKurang++;
+    else if (codeBbU === "L") countsBbU.lebih++;
+
+    // Hitung distribusi TB/U
+    if (codeTbU === "N") countsTbU.normal++;
+    else if (codeTbU === "P") countsTbU.pendek++;
+    else if (codeTbU === "SP") countsTbU.sangatPendek++;
+    else if (codeTbU === "T") countsTbU.tinggi++;
+
+    // Hitung distribusi BB/TB
+    if (codeBbTb === "N") countsBbTb.normal++;
+    else if (codeBbTb === "K") countsBbTb.kurang++;
+    else if (codeBbTb === "SK") countsBbTb.sangatKurang++;
+    else if (codeBbTb === "G") countsBbTb.lebih++;
+
+    if (codeTbU === "P" || codeTbU === "SP") stuntingCount++;
+    if (codeBbTb === "K" || codeBbTb === "SK") wastingCount++;
+
     // Cek indikator risiko / tindak lanjut
     const masalah: string[] = [];
     let saran = "Pemantauan rutin posyandu";
 
-    if (l.statusTbU === "SP") {
+    if (codeTbU === "SP") {
       masalah.push("Sangat Pendek (Severe Stunting)");
       saran = "Rujukan Puskesmas & PMT Pemulihan Tinggi Protein";
-    } else if (l.statusTbU === "P") {
+    } else if (codeTbU === "P") {
       masalah.push("Pendek (Stunting)");
       saran = "Intervensi PMT Pemulihan & Konseling Sanitasi/Gizi";
     }
 
-    if (l.statusBbTb === "SK") {
+    if (codeBbTb === "SK") {
       masalah.push("Gizi Buruk (Severe Wasting)");
       saran = "Rujukan Segera ke Puskesmas / Rawat Inap";
-    } else if (l.statusBbTb === "K") {
+    } else if (codeBbTb === "K") {
       masalah.push("Gizi Kurang (Wasting)");
       if (saran === "Pemantauan rutin posyandu") saran = "PMT Pemulihan 90 Hari & Edukasi MP-ASI";
-    } else if (l.statusBbTb === "G" || l.statusBbTb === "L") {
+    } else if (codeBbTb === "G") {
       masalah.push("Berisiko Gizi Lebih / Gemuk");
       if (saran === "Pemantauan rutin posyandu") saran = "Konseling Pola Makan Sehat & Aktivitas Fisik";
     }
 
-    if (l.statusBbU === "SK") {
+    if (codeBbU === "SK") {
       masalah.push("BB Sangat Kurang");
-    } else if (l.statusBbU === "K") {
+    } else if (codeBbU === "K") {
       masalah.push("BB Kurang");
     }
 
@@ -138,9 +179,6 @@ export function calculateRekapanBalita(
     }
   });
 
-  const stuntingCount = balitaLogs.filter((l) => l.statusTbU === "P" || l.statusTbU === "SP").length;
-  const wastingCount = balitaLogs.filter((l) => l.statusBbTb === "K" || l.statusBbTb === "SK").length;
-
   return {
     periode: periodeText,
     totalPemeriksaan: balitaLogs.length,
@@ -151,24 +189,9 @@ export function calculateRekapanBalita(
     perluTindakLanjut: attentionList.length,
     kasusStunting: stuntingCount,
     kasusWasting: wastingCount,
-    statusBbU: {
-      normal: balitaLogs.filter((l) => l.statusBbU === "N").length,
-      kurang: balitaLogs.filter((l) => l.statusBbU === "K").length,
-      sangatKurang: balitaLogs.filter((l) => l.statusBbU === "SK").length,
-      lebih: balitaLogs.filter((l) => l.statusBbU === "L").length,
-    },
-    statusTbU: {
-      normal: balitaLogs.filter((l) => l.statusTbU === "N").length,
-      pendek: balitaLogs.filter((l) => l.statusTbU === "P").length,
-      sangatPendek: balitaLogs.filter((l) => l.statusTbU === "SP").length,
-      tinggi: balitaLogs.filter((l) => l.statusTbU === "T").length,
-    },
-    statusBbTb: {
-      normal: balitaLogs.filter((l) => l.statusBbTb === "N").length,
-      kurang: balitaLogs.filter((l) => l.statusBbTb === "K").length,
-      sangatKurang: balitaLogs.filter((l) => l.statusBbTb === "SK").length,
-      lebih: balitaLogs.filter((l) => l.statusBbTb === "L" || l.statusBbTb === "G").length,
-    },
+    statusBbU: countsBbU,
+    statusTbU: countsTbU,
+    statusBbTb: countsBbTb,
     vitaminA: balitaLogs.filter((l) => l.vitaminA).length,
     imunisasiLengkap: balitaLogs.filter((l) => l.statusImunisasi && l.statusImunisasi !== "").length,
     obatCacing: balitaLogs.filter((l) => l.obatCacing).length,

@@ -110,30 +110,155 @@ export function hitungIMT(beratBadan: number, tinggiBadan: number): number {
   return isNaN(imt) ? 0 : Number(imt.toFixed(1));
 }
 
+export function hitungStatusBbUCode(
+  beratBadan: number,
+  usiaBulan: number,
+  jenisKelamin: 'L' | 'P'
+): 'SK' | 'K' | 'N' | 'L' {
+  const zScore = hitungZScoreBBU(beratBadan, usiaBulan, jenisKelamin);
+  if (zScore < -3) return 'SK';
+  if (zScore < -2) return 'K';
+  if (zScore <= 1) return 'N';
+  return 'L';
+}
+
+export function hitungStatusTbUCode(
+  tinggiBadan: number,
+  usiaBulan: number,
+  jenisKelamin: 'L' | 'P'
+): 'SP' | 'P' | 'N' | 'T' {
+  const zScore = hitungZScoreTBU(tinggiBadan, usiaBulan, jenisKelamin);
+  if (zScore < -3) return 'SP';
+  if (zScore < -2) return 'P';
+  if (zScore <= 2) return 'N';
+  return 'T';
+}
+
+export function hitungStatusBbTbCode(
+  beratBadan: number,
+  tinggiBadan: number,
+  jenisKelamin: 'L' | 'P'
+): 'SK' | 'K' | 'N' | 'G' {
+  const zScore = hitungZScoreBBTB(beratBadan, tinggiBadan, jenisKelamin);
+  if (zScore < -3) return 'SK';
+  if (zScore < -2) return 'K';
+  if (zScore <= 1) return 'N';
+  return 'G';
+}
+
 // Helper functions untuk convert label ke enum code
-export function convertStatusBbUToCode(label: 'Sangat Kurang' | 'Kurang' | 'Normal' | 'Lebih'): 'SK' | 'K' | 'N' | 'L' {
-  switch (label) {
-    case 'Sangat Kurang': return 'SK';
-    case 'Kurang': return 'K';
-    case 'Normal': return 'N';
-    case 'Lebih': return 'L';
+export function convertStatusBbUToCode(label: string): 'SK' | 'K' | 'N' | 'L' {
+  if (!label) return 'N';
+  const s = label.trim().toUpperCase();
+  if (s === 'SK' || s.includes('SANGAT KURANG') || s.includes('SEVERELY')) return 'SK';
+  if (s === 'K' || s.includes('KURANG') || s.includes('UNDERWEIGHT')) return 'K';
+  if (s === 'L' || s.includes('LEBIH') || s.includes('RISIKO')) return 'L';
+  return 'N';
+}
+
+export function convertStatusTbUToCode(label: string): 'SP' | 'P' | 'N' | 'T' {
+  if (!label) return 'N';
+  const s = label.trim().toUpperCase();
+  if (s === 'SP' || s.includes('SANGAT PENDEK') || s.includes('SEVERELY')) return 'SP';
+  if (s === 'P' || s.includes('PENDEK') || s.includes('STUNT')) return 'P';
+  if (s === 'T' || s.includes('TINGGI')) return 'T';
+  return 'N';
+}
+
+export function convertStatusBbTbToCode(label: string): 'SK' | 'K' | 'N' | 'G' {
+  if (!label) return 'N';
+  const s = label.trim().toUpperCase();
+  if (s === 'SK' || s.includes('SANGAT KURUS') || s.includes('GIZI BURUK') || s.includes('SEVERE')) return 'SK';
+  if (s === 'K' || s.includes('KURUS') || s.includes('GIZI KURANG') || s.includes('WASTED')) return 'K';
+  if (s === 'G' || s === 'L' || s.includes('GEMUK') || s.includes('LEBIH') || s.includes('OBESITAS')) return 'G';
+  return 'N';
+}
+
+export function normalizeStatusBbUCode(
+  rawStatus?: string | null,
+  beratBadan?: number,
+  usiaBulan?: number,
+  jenisKelamin?: string
+): 'SK' | 'K' | 'N' | 'L' {
+  if (rawStatus && typeof rawStatus === 'string' && rawStatus.trim() !== '' && rawStatus !== '-') {
+    return convertStatusBbUToCode(rawStatus);
+  }
+  const bb = Number(beratBadan);
+  if (!isNaN(bb) && bb > 0 && usiaBulan !== undefined && usiaBulan >= 0) {
+    const jk = (jenisKelamin === 'P' || jenisKelamin === 'p') ? 'P' : 'L';
+    return hitungStatusBbUCode(bb, usiaBulan, jk);
+  }
+  return 'N';
+}
+
+export function normalizeStatusTbUCode(
+  rawStatus?: string | null,
+  tinggiBadan?: number,
+  usiaBulan?: number,
+  jenisKelamin?: string
+): 'SP' | 'P' | 'N' | 'T' {
+  if (rawStatus && typeof rawStatus === 'string' && rawStatus.trim() !== '' && rawStatus !== '-') {
+    return convertStatusTbUToCode(rawStatus);
+  }
+  const tb = Number(tinggiBadan);
+  if (!isNaN(tb) && tb > 0 && usiaBulan !== undefined && usiaBulan >= 0) {
+    const jk = (jenisKelamin === 'P' || jenisKelamin === 'p') ? 'P' : 'L';
+    return hitungStatusTbUCode(tb, usiaBulan, jk);
+  }
+  return 'N';
+}
+
+export function normalizeStatusBbTbCode(
+  rawStatus?: string | null,
+  beratBadan?: number,
+  tinggiBadan?: number,
+  jenisKelamin?: string
+): 'SK' | 'K' | 'N' | 'G' {
+  if (rawStatus && typeof rawStatus === 'string' && rawStatus.trim() !== '' && rawStatus !== '-') {
+    return convertStatusBbTbToCode(rawStatus);
+  }
+  const bb = Number(beratBadan);
+  const tb = Number(tinggiBadan);
+  if (!isNaN(bb) && bb > 0 && !isNaN(tb) && tb > 0) {
+    const jk = (jenisKelamin === 'P' || jenisKelamin === 'p') ? 'P' : 'L';
+    return hitungStatusBbTbCode(bb, tb, jk);
+  }
+  return 'N';
+}
+
+export function getStatusBbUText(code?: string): string {
+  if (!code) return 'Normal';
+  const c = convertStatusBbUToCode(code);
+  switch (c) {
+    case 'SK': return 'Sangat Kurang';
+    case 'K': return 'Kurang';
+    case 'N': return 'Normal';
+    case 'L': return 'Risiko BB Lebih';
+    default: return code;
   }
 }
 
-export function convertStatusTbUToCode(label: 'Sangat Pendek' | 'Pendek' | 'Normal' | 'Tinggi'): 'SP' | 'P' | 'N' | 'T' {
-  switch (label) {
-    case 'Sangat Pendek': return 'SP';
-    case 'Pendek': return 'P';
-    case 'Normal': return 'N';
-    case 'Tinggi': return 'T';
+export function getStatusTbUText(code?: string): string {
+  if (!code) return 'Normal';
+  const c = convertStatusTbUToCode(code);
+  switch (c) {
+    case 'SP': return 'Sangat Pendek (Stunting)';
+    case 'P': return 'Pendek (Stunting)';
+    case 'N': return 'Normal';
+    case 'T': return 'Tinggi';
+    default: return code;
   }
 }
 
-export function convertStatusBbTbToCode(label: 'Sangat Kurus' | 'Kurus' | 'Normal' | 'Gemuk'): 'SK' | 'K' | 'N' | 'G' {
-  switch (label) {
-    case 'Sangat Kurus': return 'SK';
-    case 'Kurus': return 'K';
-    case 'Normal': return 'N';
-    case 'Gemuk': return 'G';
+export function getStatusBbTbText(code?: string): string {
+  if (!code) return 'Normal';
+  const c = convertStatusBbTbToCode(code);
+  switch (c) {
+    case 'SK': return 'Gizi Buruk (Severe Wasting)';
+    case 'K': return 'Gizi Kurang (Wasting)';
+    case 'N': return 'Gizi Baik (Normal)';
+    case 'G': return 'Gizi Lebih / Gemuk';
+    default: return code;
   }
 }
+

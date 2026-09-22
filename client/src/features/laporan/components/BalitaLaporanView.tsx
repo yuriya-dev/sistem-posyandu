@@ -17,6 +17,14 @@ import {
   Search,
 } from "lucide-react";
 import AnimatedNumber from "./AnimatedNumber";
+import {
+  normalizeStatusBbUCode,
+  normalizeStatusTbUCode,
+  normalizeStatusBbTbCode,
+  getStatusBbUText,
+  getStatusTbUText,
+  getStatusBbTbText,
+} from "@/lib/zScoreCalculator";
 
 interface BalitaLaporanViewProps {
   rekapanBalita: RekapanBalita | null;
@@ -859,19 +867,28 @@ export default function BalitaLaporanView({
                 filteredBalitaLogs
                   .slice((pageBalita - 1) * pageSizeBalita, pageBalita * pageSizeBalita)
                   .map((log, idx) => {
+                    let usiaBlnNum: number | undefined = log.usiaBulan;
                     let usiaStr = "-";
                     if (log.tanggalLahir) {
                       const lahir = new Date(log.tanggalLahir);
                       const periksa = log.tanggal ? new Date(log.tanggal) : new Date();
-                      const totalBulan = Math.max(
+                      usiaBlnNum = Math.max(
                         0,
                         (periksa.getFullYear() - lahir.getFullYear()) * 12 +
                           (periksa.getMonth() - lahir.getMonth())
                       );
-                      usiaStr = `${totalBulan} bln`;
+                      usiaStr = `${usiaBlnNum} bln`;
                     } else if (log.usiaBulan !== undefined) {
                       usiaStr = `${log.usiaBulan} bln`;
                     }
+
+                    const rawBbU = log.statusBbU || (log as any).statusBBU;
+                    const rawTbU = log.statusTbU || (log as any).statusTBU;
+                    const rawBbTb = log.statusBbTb || (log as any).statusBBTB;
+
+                    const codeBbU = normalizeStatusBbUCode(rawBbU, log.beratBadan, usiaBlnNum, log.jenisKelamin);
+                    const codeTbU = normalizeStatusTbUCode(rawTbU, log.tinggiBadan, usiaBlnNum, log.jenisKelamin);
+                    const codeBbTb = normalizeStatusBbTbCode(rawBbTb, log.beratBadan, log.tinggiBadan, log.jenisKelamin);
 
                     return (
                       <tr key={log.id} className="hover:bg-gray-50/80 transition-colors">
@@ -914,37 +931,29 @@ export default function BalitaLaporanView({
                         <td className="px-2.5 py-2 text-gray-900 font-bold whitespace-nowrap">{log.tinggiBadan ?? "-"}</td>
                         <td className="px-2.5 py-2 text-gray-700 whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            log.statusBbU === "N" ? "bg-emerald-100 text-emerald-800" :
-                            log.statusBbU === "K" ? "bg-amber-100 text-amber-800" :
-                            log.statusBbU === "SK" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
+                            codeBbU === "N" ? "bg-emerald-100 text-emerald-800" :
+                            codeBbU === "K" ? "bg-amber-100 text-amber-800" :
+                            codeBbU === "SK" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"
                           }`}>
-                            {log.statusBbU === "N" ? "Normal" :
-                             log.statusBbU === "K" ? "Kurang" :
-                             log.statusBbU === "SK" ? "Sangat Kurang" :
-                             log.statusBbU === "L" ? "Lebih" : log.statusBbU || "-"}
+                            {getStatusBbUText(codeBbU)}
                           </span>
                         </td>
                         <td className="px-2.5 py-2 text-gray-700 whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            log.statusTbU === "N" ? "bg-emerald-100 text-emerald-800" :
-                            log.statusTbU === "P" ? "bg-purple-100 text-purple-800" :
-                            log.statusTbU === "SP" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
+                            codeTbU === "N" ? "bg-emerald-100 text-emerald-800" :
+                            codeTbU === "P" ? "bg-purple-100 text-purple-800" :
+                            codeTbU === "SP" ? "bg-red-100 text-red-800" : "bg-teal-100 text-teal-800"
                           }`}>
-                            {log.statusTbU === "N" ? "Normal" :
-                             log.statusTbU === "P" ? "Pendek" :
-                             log.statusTbU === "SP" ? "Sangat Pendek" : log.statusTbU || "-"}
+                            {getStatusTbUText(codeTbU)}
                           </span>
                         </td>
                         <td className="px-2.5 py-2 text-gray-700 whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            log.statusBbTb === "N" ? "bg-emerald-100 text-emerald-800" :
-                            log.statusBbTb === "K" ? "bg-amber-100 text-amber-800" :
-                            log.statusBbTb === "SK" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"
+                            codeBbTb === "N" ? "bg-emerald-100 text-emerald-800" :
+                            codeBbTb === "K" ? "bg-amber-100 text-amber-800" :
+                            codeBbTb === "SK" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"
                           }`}>
-                            {log.statusBbTb === "N" ? "Gizi Baik" :
-                             log.statusBbTb === "K" ? "Gizi Kurang" :
-                             log.statusBbTb === "SK" ? "Gizi Buruk" :
-                             log.statusBbTb === "G" ? "Gizi Lebih" : log.statusBbTb || "-"}
+                            {getStatusBbTbText(codeBbTb)}
                           </span>
                         </td>
                         <td className="px-2.5 py-2 text-gray-600 whitespace-nowrap">{log.lingkarKepala ?? "-"}</td>

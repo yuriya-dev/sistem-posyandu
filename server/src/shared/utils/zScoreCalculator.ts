@@ -107,3 +107,68 @@ export function hitungIMT(beratBadan: number, tinggiBadan: number): number {
   const tbMeter = tinggiBadan / 100;
   return Number((beratBadan / (tbMeter * tbMeter)).toFixed(1));
 }
+
+export function normalizeStatusBbUCode(
+  rawStatus?: string | null,
+  beratBadan?: number,
+  usiaBulan?: number,
+  jenisKelamin?: string
+): 'SK' | 'K' | 'N' | 'L' {
+  if (rawStatus && typeof rawStatus === 'string' && rawStatus.trim() !== '' && rawStatus !== '-') {
+    const s = rawStatus.trim().toUpperCase();
+    if (s === 'SK' || s.includes('SANGAT KURANG') || s.includes('SEVERELY')) return 'SK';
+    if (s === 'K' || s.includes('KURANG') || s.includes('UNDERWEIGHT')) return 'K';
+    if (s === 'L' || s.includes('LEBIH') || s.includes('RISIKO')) return 'L';
+    if (s === 'N' || s.includes('NORMAL')) return 'N';
+  }
+  const bb = Number(beratBadan);
+  if (!isNaN(bb) && bb > 0 && usiaBulan !== undefined && usiaBulan >= 0) {
+    const jk = (jenisKelamin === 'P' || jenisKelamin === 'p') ? 'P' : 'L';
+    return hitungStatusBbU(bb, usiaBulan, jk);
+  }
+  return 'N';
+}
+
+export function normalizeStatusTbUCode(
+  rawStatus?: string | null,
+  tinggiBadan?: number,
+  usiaBulan?: number,
+  jenisKelamin?: string
+): 'SP' | 'P' | 'N' | 'T' {
+  if (rawStatus && typeof rawStatus === 'string' && rawStatus.trim() !== '' && rawStatus !== '-') {
+    const s = rawStatus.trim().toUpperCase();
+    if (s === 'SP' || s.includes('SANGAT PENDEK') || s.includes('SEVERELY')) return 'SP';
+    if (s === 'P' || s.includes('PENDEK') || s.includes('STUNT')) return 'P';
+    if (s === 'T' || s.includes('TINGGI')) return 'T';
+    if (s === 'N' || s.includes('NORMAL')) return 'N';
+  }
+  const tb = Number(tinggiBadan);
+  if (!isNaN(tb) && tb > 0 && usiaBulan !== undefined && usiaBulan >= 0) {
+    const jk = (jenisKelamin === 'P' || jenisKelamin === 'p') ? 'P' : 'L';
+    return hitungStatusTbU(tb, usiaBulan, jk);
+  }
+  return 'N';
+}
+
+export function normalizeStatusBbTbCode(
+  rawStatus?: string | null,
+  beratBadan?: number,
+  tinggiBadan?: number,
+  jenisKelamin?: string
+): 'SK' | 'K' | 'N' | 'G' {
+  if (rawStatus && typeof rawStatus === 'string' && rawStatus.trim() !== '' && rawStatus !== '-') {
+    const s = rawStatus.trim().toUpperCase();
+    if (s === 'SK' || s.includes('SANGAT KURUS') || s.includes('GIZI BURUK') || s.includes('SEVERE')) return 'SK';
+    if (s === 'K' || s.includes('KURUS') || s.includes('GIZI KURANG') || s.includes('WASTED')) return 'K';
+    if (s === 'G' || s === 'L' || s.includes('GEMUK') || s.includes('LEBIH') || s.includes('OBESITAS')) return 'G';
+    if (s === 'N' || s.includes('NORMAL') || s.includes('BAIK')) return 'N';
+  }
+  const bb = Number(beratBadan);
+  const tb = Number(tinggiBadan);
+  if (!isNaN(bb) && bb > 0 && !isNaN(tb) && tb > 0) {
+    const jk = (jenisKelamin === 'P' || jenisKelamin === 'p') ? 'P' : 'L';
+    return hitungStatusBbTb(bb, tb, jk);
+  }
+  return 'N';
+}
+

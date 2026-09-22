@@ -1,6 +1,11 @@
 import prisma from '../../shared/config/prisma';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
+import {
+  normalizeStatusBbUCode,
+  normalizeStatusTbUCode,
+  normalizeStatusBbTbCode,
+} from '../../shared/utils/zScoreCalculator';
 
 export interface FilterRiwayat {
   tipe?: 'semua' | 'Balita' | 'Lansia';
@@ -167,15 +172,19 @@ export const riwayatService = {
         if (seenBalitaByMonth.has(visitorKey)) continue;
         seenBalitaByMonth.add(visitorKey);
 
-        const isWarning = item.statusBbU === 'SK' || item.statusBbU === 'K' || item.statusTbU === 'SP' || item.statusTbU === 'P' || item.statusBbTb === 'SK' || item.statusBbTb === 'K' || item.statusBbTb === 'G';
+        const codeBbU = normalizeStatusBbUCode(item.statusBbU, Number(item.beratBadan), item.usiaBulan, item.balita.jenisKelamin);
+        const codeTbU = normalizeStatusTbUCode(item.statusTbU, Number(item.tinggiBadan), item.usiaBulan, item.balita.jenisKelamin);
+        const codeBbTb = normalizeStatusBbTbCode(item.statusBbTb, Number(item.beratBadan), Number(item.tinggiBadan), item.balita.jenisKelamin);
+
+        const isWarning = codeBbU === 'SK' || codeBbU === 'K' || codeTbU === 'SP' || codeTbU === 'P' || codeBbTb === 'SK' || codeBbTb === 'K' || codeBbTb === 'G';
         const statusType: 'success' | 'warning' = isWarning ? 'warning' : 'success';
 
-        let statusDesc = `Normal (BB/U: ${getStatusBbUText(item.statusBbU)})`;
-        if (item.statusBbU === 'K') statusDesc = 'BB Kurang';
-        else if (item.statusBbU === 'SK') statusDesc = 'BB Sangat Kurang';
-        else if (item.statusTbU === 'P') statusDesc = 'Stunting (Pendek)';
-        else if (item.statusTbU === 'SP') statusDesc = 'Sangat Pendek';
-        else if (item.statusBbTb === 'G') statusDesc = 'Gizi Lebih / Obesitas';
+        let statusDesc = `Normal (BB/U: ${getStatusBbUText(codeBbU)})`;
+        if (codeBbU === 'K') statusDesc = 'BB Kurang';
+        else if (codeBbU === 'SK') statusDesc = 'BB Sangat Kurang';
+        else if (codeTbU === 'P') statusDesc = 'Stunting (Pendek)';
+        else if (codeTbU === 'SP') statusDesc = 'Sangat Pendek';
+        else if (codeBbTb === 'G') statusDesc = 'Gizi Lebih / Obesitas';
 
         const paramStr = `BB: ${item.beratBadan}kg, TB: ${item.tinggiBadan}cm${item.lingkarKepala ? `, LK: ${item.lingkarKepala}cm` : ''}${item.vitaminA ? ', Vit A' : ''}`;
 
@@ -198,9 +207,9 @@ export const riwayatService = {
           tinggiBadan: Number(item.tinggiBadan),
           lingkarKepala: item.lingkarKepala ? Number(item.lingkarKepala) : undefined,
           lingkarLengan: item.lingkarLengan ? Number(item.lingkarLengan) : undefined,
-          statusBbU: item.statusBbU,
-          statusTbU: item.statusTbU,
-          statusBbTb: item.statusBbTb,
+          statusBbU: codeBbU,
+          statusTbU: codeTbU,
+          statusBbTb: codeBbTb,
           statusKms: item.statusKms || undefined,
           vitaminA: item.vitaminA,
           asiEksklusif: item.asiEksklusif || undefined,
@@ -623,19 +632,19 @@ export const riwayatService = {
       const age13_24 = items.filter(i => getAgeInfo(i).months >= 13 && getAgeInfo(i).months <= 24).length;
       const age25_60 = items.filter(i => getAgeInfo(i).months >= 25 && getAgeInfo(i).months <= 60).length;
 
-      const bbUNormal = items.filter(i => i.statusBbU === 'N').length;
-      const bbUKurang = items.filter(i => i.statusBbU === 'K').length;
-      const bbUSgKurang = items.filter(i => i.statusBbU === 'SK').length;
+      const bbUNormal = items.filter(i => normalizeStatusBbUCode(i.statusBbU, Number(i.beratBadan), i.usiaBulan, i.jenisKelamin) === 'N').length;
+      const bbUKurang = items.filter(i => normalizeStatusBbUCode(i.statusBbU, Number(i.beratBadan), i.usiaBulan, i.jenisKelamin) === 'K').length;
+      const bbUSgKurang = items.filter(i => normalizeStatusBbUCode(i.statusBbU, Number(i.beratBadan), i.usiaBulan, i.jenisKelamin) === 'SK').length;
 
-      const tbUNormal = items.filter(i => i.statusTbU === 'N').length;
-      const tbUPendek = items.filter(i => i.statusTbU === 'P').length;
-      const tbUSgPendek = items.filter(i => i.statusTbU === 'SP').length;
+      const tbUNormal = items.filter(i => normalizeStatusTbUCode(i.statusTbU, Number(i.tinggiBadan), i.usiaBulan, i.jenisKelamin) === 'N').length;
+      const tbUPendek = items.filter(i => normalizeStatusTbUCode(i.statusTbU, Number(i.tinggiBadan), i.usiaBulan, i.jenisKelamin) === 'P').length;
+      const tbUSgPendek = items.filter(i => normalizeStatusTbUCode(i.statusTbU, Number(i.tinggiBadan), i.usiaBulan, i.jenisKelamin) === 'SP').length;
       const tbUStunting = tbUPendek + tbUSgPendek;
 
-      const bbTbNormal = items.filter(i => i.statusBbTb === 'N').length;
-      const bbTbKurus = items.filter(i => i.statusBbTb === 'K').length;
-      const bbTbSgKurus = items.filter(i => i.statusBbTb === 'SK').length;
-      const bbTbGemuk = items.filter(i => i.statusBbTb === 'G' || i.statusBbTb === 'L').length;
+      const bbTbNormal = items.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'N').length;
+      const bbTbKurus = items.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'K').length;
+      const bbTbSgKurus = items.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'SK').length;
+      const bbTbGemuk = items.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'G').length;
       const bbTbWasting = bbTbKurus + bbTbSgKurus;
 
       const vitACount = items.filter(i => i.vitaminA).length;
@@ -1760,19 +1769,19 @@ export const riwayatService = {
         const col2LabelX = startX + 225;
         const col2ColonX = startX + 315;
 
-        const bbUNormal = balitaItems.filter(i => i.statusBbU === 'N').length;
-        const bbUKurang = balitaItems.filter(i => i.statusBbU === 'K').length;
-        const bbUSgKurang = balitaItems.filter(i => i.statusBbU === 'SK').length;
+        const bbUNormal = balitaItems.filter(i => normalizeStatusBbUCode(i.statusBbU, Number(i.beratBadan), i.usiaBulan, i.jenisKelamin) === 'N').length;
+        const bbUKurang = balitaItems.filter(i => normalizeStatusBbUCode(i.statusBbU, Number(i.beratBadan), i.usiaBulan, i.jenisKelamin) === 'K').length;
+        const bbUSgKurang = balitaItems.filter(i => normalizeStatusBbUCode(i.statusBbU, Number(i.beratBadan), i.usiaBulan, i.jenisKelamin) === 'SK').length;
 
-        const tbUNormal = balitaItems.filter(i => i.statusTbU === 'N').length;
-        const tbUPendek = balitaItems.filter(i => i.statusTbU === 'P').length;
-        const tbUSgPendek = balitaItems.filter(i => i.statusTbU === 'SP').length;
+        const tbUNormal = balitaItems.filter(i => normalizeStatusTbUCode(i.statusTbU, Number(i.tinggiBadan), i.usiaBulan, i.jenisKelamin) === 'N').length;
+        const tbUPendek = balitaItems.filter(i => normalizeStatusTbUCode(i.statusTbU, Number(i.tinggiBadan), i.usiaBulan, i.jenisKelamin) === 'P').length;
+        const tbUSgPendek = balitaItems.filter(i => normalizeStatusTbUCode(i.statusTbU, Number(i.tinggiBadan), i.usiaBulan, i.jenisKelamin) === 'SP').length;
         const tbUStunting = tbUPendek + tbUSgPendek;
 
-        const bbTbNormal = balitaItems.filter(i => i.statusBbTb === 'N').length;
-        const bbTbKurus = balitaItems.filter(i => i.statusBbTb === 'K').length;
-        const bbTbSgKurus = balitaItems.filter(i => i.statusBbTb === 'SK').length;
-        const bbTbGemuk = balitaItems.filter(i => i.statusBbTb === 'G' || i.statusBbTb === 'L').length;
+        const bbTbNormal = balitaItems.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'N').length;
+        const bbTbKurus = balitaItems.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'K').length;
+        const bbTbSgKurus = balitaItems.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'SK').length;
+        const bbTbGemuk = balitaItems.filter(i => normalizeStatusBbTbCode(i.statusBbTb, Number(i.beratBadan), Number(i.tinggiBadan), i.jenisKelamin) === 'G').length;
         const bbTbWasting = bbTbKurus + bbTbSgKurus;
 
         doc.font('Helvetica-Bold').fillColor('#334155').text('Status Gizi Antropometri (BB/U, TB/U, TB/BB):', col2LabelX, yPos + 22);
