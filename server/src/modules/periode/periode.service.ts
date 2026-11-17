@@ -54,9 +54,12 @@ export const periodeService = {
     });
   },
 
-  async update(id: string, input: UpdatePeriodeInput) {
-    const existing = await prisma.periodePelayanan.findUnique({
-      where: { id },
+  async update(id: string, input: UpdatePeriodeInput, posyanduId?: string) {
+    const existing = await prisma.periodePelayanan.findFirst({
+      where: {
+        id,
+        ...(posyanduId ? { posyanduId } : {}),
+      },
     });
 
     if (!existing) {
@@ -85,6 +88,13 @@ export const periodeService = {
   },
 
   async activate(posyanduId: string, id: string) {
+    const existing = await prisma.periodePelayanan.findFirst({
+      where: { id, posyanduId },
+    });
+    if (!existing) {
+      throw new Error('Periode pelayanan tidak ditemukan');
+    }
+
     await prisma.periodePelayanan.updateMany({
       where: { posyanduId, status: 'AKTIF' },
       data: { status: 'SELESAI' },
@@ -96,9 +106,12 @@ export const periodeService = {
     });
   },
 
-  async delete(id: string) {
-    const existing = await prisma.periodePelayanan.findUnique({
-      where: { id },
+  async delete(id: string, posyanduId?: string) {
+    const existing = await prisma.periodePelayanan.findFirst({
+      where: {
+        id,
+        ...(posyanduId ? { posyanduId } : {}),
+      },
     });
 
     if (!existing) {

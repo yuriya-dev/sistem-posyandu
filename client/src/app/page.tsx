@@ -32,6 +32,7 @@ import {
   CaretDoubleRight,
   Calendar,
   Trash,
+  Globe,
 } from "@phosphor-icons/react";
 import { Sun, Moon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -187,12 +188,6 @@ export default function Home() {
       const res = await periodeApi.getActive(posyanduId);
       if (res.success) {
         setActivePeriode(res.data);
-        const now = new Date();
-        const curBulan = now.getMonth() + 1;
-        const curTahun = now.getFullYear();
-        if (!res.data || res.data.bulan !== curBulan || res.data.tahun !== curTahun) {
-          setIsPeriodeModalOpen(true);
-        }
       }
     } catch (err) {
       console.error("Gagal memuat periode pelayanan aktif:", err);
@@ -498,6 +493,58 @@ export default function Home() {
   // ── Login wall ───────────────────────────────────────────
   if (!user || !posyanduId) {
     return <LoginPage />;
+  }
+
+  // ── User Puskesmas tidak bisa mengakses aplikasi Posyandu ─
+  if (user.role === "PUSKESMAS") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between p-4 sm:p-6">
+        <header className="max-w-xl w-full mx-auto flex items-center justify-between pb-3 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-1 shadow-2xs">
+              <img src="/logo.svg" alt="Logo SIIP" className="w-5 h-5 object-contain" />
+            </div>
+            <span className="font-bold text-slate-900 text-sm">SIIP</span>
+          </div>
+          <button
+            onClick={logout}
+            className="text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+          >
+            Keluar
+          </button>
+        </header>
+
+        <main className="max-w-md w-full mx-auto my-auto bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-xs text-center">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto mb-3">
+            <WarningCircle className="w-6 h-6" weight="bold" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900">
+            Akses Dibatasi: Khusus Kader Posyandu
+          </h2>
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+            Akun Anda terdaftar sebagai <strong>Petugas Puskesmas</strong> ({user.nama}). Petugas Puskesmas tidak dapat mengakses aplikasi pencatatan kader Posyandu. Silakan gunakan Portal Puskesmas untuk memantau rekapitulasi data.
+          </p>
+          <div className="mt-5 space-y-2">
+            <a
+              href="/puskesmas"
+              className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+            >
+              <span>Buka Portal Puskesmas →</span>
+            </a>
+            <button
+              onClick={logout}
+              className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs rounded-lg transition-colors cursor-pointer"
+            >
+              Keluar dan Masuk sebagai Kader Posyandu
+            </button>
+          </div>
+        </main>
+
+        <footer className="text-center text-xs text-slate-400 py-3">
+          SIIP © 2026 · Sistem Informasi Posyandu
+        </footer>
+      </div>
+    );
   }
 
   // Categorized Navigation Sections
@@ -808,9 +855,24 @@ export default function Home() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-11 h-11 flex items-center justify-center rounded-xl text-saas-primary hover:bg-teal-50 border border-teal-200 transition-all"
-                  aria-label="Portal Publik"
+                  aria-label="Portal Puskesmas"
                 >
                   <Buildings className="w-5 h-5 text-saas-primary" weight="bold" />
+                </a>
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-xl top-1/2 -translate-y-1/2">
+                  Portal Puskesmas ↗
+                </div>
+              </div>
+
+              <div className="relative group flex justify-center">
+                <a
+                  href="/publik"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-11 h-11 flex items-center justify-center rounded-xl text-teal-700 hover:bg-teal-50 border border-teal-200 transition-all"
+                  aria-label="Portal Publik"
+                >
+                  <Globe className="w-5 h-5 text-teal-600" weight="bold" />
                 </a>
                 <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-xl top-1/2 -translate-y-1/2">
                   Portal Publik ↗
@@ -859,6 +921,15 @@ export default function Home() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-saas-primary hover:bg-teal-50 transition-all border border-teal-200"
               >
                 <Buildings className="w-4 h-4 shrink-0 text-saas-primary" weight="bold" />
+                <span>Portal Puskesmas ↗</span>
+              </a>
+              <a
+                href="/publik"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-teal-700 hover:bg-teal-50 transition-all border border-teal-200"
+              >
+                <Globe className="w-4 h-4 shrink-0 text-teal-600" weight="bold" />
                 <span>Portal Publik ↗</span>
               </a>
               <button
@@ -998,6 +1069,15 @@ export default function Home() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-saas-primary hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all border border-teal-200 dark:border-teal-800/50"
               >
                 <Buildings className="w-4 h-4 shrink-0 text-saas-primary" weight="bold" />
+                <span>Portal Puskesmas ↗</span>
+              </a>
+              <a
+                href="/publik"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all border border-teal-200 dark:border-teal-800/50"
+              >
+                <Globe className="w-4 h-4 shrink-0 text-teal-600" weight="bold" />
                 <span>Portal Publik ↗</span>
               </a>
               <button

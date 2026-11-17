@@ -33,8 +33,9 @@ export const createPeriode = async (req: Request, res: Response, next: NextFunct
 
 export const updatePeriode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const id = req.params.id as string;
-    const data = await periodeService.update(id, req.body);
+    const data = await periodeService.update(id, req.body, posyanduId);
     res.json({ success: true, message: 'Periode pelayanan berhasil diperbarui', data });
   } catch (err) {
     next(err);
@@ -54,8 +55,9 @@ export const activatePeriode = async (req: Request, res: Response, next: NextFun
 
 export const deletePeriode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const id = req.params.id as string;
-    await periodeService.delete(id);
+    await periodeService.delete(id, posyanduId);
     res.json({ success: true, message: 'Periode pelayanan berhasil dihapus' });
   } catch (err) {
     next(err);

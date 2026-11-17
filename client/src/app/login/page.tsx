@@ -15,6 +15,7 @@ import {
   Users,
   MapPin,
   Building2,
+  Globe,
   Mail,
   Lock,
   User,
@@ -66,13 +67,19 @@ function LeftHero() {
         </div>
       </div>
 
-      {/* Footer Info & Portal Publik Link */}
-      <div className="pt-6 mt-8 flex items-center justify-between text-xs text-slate-400">
+      {/* Footer Info & Portal Links */}
+      <div className="pt-6 mt-8 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        <Link
+          href="/publik"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-semibold transition-colors"
+        >
+          <Globe className="w-3.5 h-3.5" /> Portal Publik →
+        </Link>
         <Link
           href="/puskesmas"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-semibold transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold transition-colors"
         >
-          <Building2 className="w-3.5 h-3.5" /> Portal Publik →
+          <Building2 className="w-3.5 h-3.5" /> Portal Puskesmas
         </Link>
       </div>
     </div>
@@ -682,7 +689,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && user && posyanduId) {
-      router.replace("/");
+      if (user.role === "PUSKESMAS") {
+        router.replace("/puskesmas");
+      } else {
+        router.replace("/");
+      }
     }
   }, [user, posyanduId, isLoading, router]);
 

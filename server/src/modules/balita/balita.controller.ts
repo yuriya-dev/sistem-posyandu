@@ -121,6 +121,7 @@ export const getAllPemeriksaanBalita = async (req: Request, res: Response, next:
 
 export const createPemeriksaanBalita = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const balitaId = req.params.balitaId as string;
     const {
       tanggalPeriksa,
@@ -145,22 +146,26 @@ export const createPemeriksaanBalita = async (req: Request, res: Response, next:
       petugasNama = kader?.nama;
     }
 
-    const data = await balitaService.createPemeriksaan(balitaId, {
-      tanggalPeriksa: new Date(tanggalPeriksa),
-      beratBadan: Number(beratBadan),
-      tinggiBadan: Number(tinggiBadan),
-      lingkarKepala: lingkarKepala ? Number(lingkarKepala) : undefined,
-      lingkarLengan: lingkarLengan ? Number(lingkarLengan) : undefined,
-      statusBbU,
-      statusTbU,
-      statusBbTb,
-      statusKms,
-      vitaminA: !!vitaminA,
-      asiEksklusif: asiEksklusif !== undefined ? !!asiEksklusif : undefined,
-      obatCacing: obatCacing !== undefined ? !!obatCacing : undefined,
-      statusImunisasi,
-      petugas: petugasNama || 'Kader Posyandu',
-    });
+    const data = await balitaService.createPemeriksaan(
+      balitaId,
+      {
+        tanggalPeriksa: new Date(tanggalPeriksa),
+        beratBadan: Number(beratBadan),
+        tinggiBadan: Number(tinggiBadan),
+        lingkarKepala: lingkarKepala ? Number(lingkarKepala) : undefined,
+        lingkarLengan: lingkarLengan ? Number(lingkarLengan) : undefined,
+        statusBbU,
+        statusTbU,
+        statusBbTb,
+        statusKms,
+        vitaminA: !!vitaminA,
+        asiEksklusif: asiEksklusif !== undefined ? !!asiEksklusif : undefined,
+        obatCacing: obatCacing !== undefined ? !!obatCacing : undefined,
+        statusImunisasi,
+        petugas: petugasNama || 'Kader Posyandu',
+      },
+      posyanduId
+    );
 
     res.status(201).json({ success: true, message: 'Pemeriksaan balita berhasil ditambahkan', data });
   } catch (err: unknown) {
@@ -174,26 +179,36 @@ export const createPemeriksaanBalita = async (req: Request, res: Response, next:
 
 export const updatePemeriksaanBalita = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const id = req.params.id as string;
     const { tanggalPeriksa, ...rest } = req.body;
 
-    const data = await balitaService.updatePemeriksaan(id, {
+    const data = await balitaService.updatePemeriksaan(id, posyanduId, {
       ...rest,
       ...(tanggalPeriksa && { tanggalPeriksa: new Date(tanggalPeriksa) }),
     });
 
     res.json({ success: true, message: 'Pemeriksaan balita berhasil diperbarui', data });
-  } catch (err) {
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes('tidak ditemukan') || err.message.includes('akses ditolak'))) {
+      res.status(404).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };
 
 export const deletePemeriksaanBalita = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const id = req.params.id as string;
-    await balitaService.deletePemeriksaan(id);
+    await balitaService.deletePemeriksaan(id, posyanduId);
     res.json({ success: true, message: 'Pemeriksaan balita berhasil dihapus' });
-  } catch (err) {
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes('tidak ditemukan') || err.message.includes('akses ditolak'))) {
+      res.status(404).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };

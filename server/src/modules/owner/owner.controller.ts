@@ -5,7 +5,7 @@ export const exportBackupData = async (req: Request, res: Response, next: NextFu
   try {
     const posyanduId = req.params.posyanduId as string;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.role !== 'OWNER' || req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke fitur backup ini' });
       return;
     }
@@ -29,7 +29,7 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
   try {
     const posyanduId = req.params.posyanduId as string;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.role !== 'OWNER' || req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke audit log' });
       return;
     }
@@ -46,8 +46,8 @@ export const resetPosyanduData = async (req: Request, res: Response, next: NextF
     const posyanduId = req.params.posyanduId as string;
     const { confirmText, password } = req.body;
 
-    if (req.user?.role !== 'OWNER') {
-      res.status(403).json({ success: false, message: 'Hanya OWNER yang dapat melakukan reset data Posyandu' });
+    if (req.user?.role !== 'OWNER' || req.user?.posyanduId !== posyanduId) {
+      res.status(403).json({ success: false, message: 'Hanya OWNER Posyandu ini yang dapat melakukan reset data' });
       return;
     }
 

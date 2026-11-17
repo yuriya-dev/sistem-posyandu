@@ -12,6 +12,8 @@ import notificationRoutes from './modules/notification/notification.routes';
 import ownerRoutes from './modules/owner/owner.routes';
 import publicRoutes from './modules/public/public.routes';
 import periodeRoutes from './modules/periode/periode.routes';
+import { authenticate } from './shared/middlewares/auth.middleware';
+import { requireTenantAccess } from './shared/middlewares/tenant.middleware';
 import { errorHandler, notFound } from './shared/middlewares/error.middleware';
 
 const app = express();
@@ -51,11 +53,11 @@ app.use('/api/posyandu', posyanduRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/owner', ownerRoutes);
 
-// Nested tenant routes
-app.use('/api/posyandu/:posyanduId/balita', balitaRoutes);
-app.use('/api/posyandu/:posyanduId/lansia', lansiaRoutes);
-app.use('/api/posyandu/:posyanduId/notifications', notificationRoutes);
-app.use('/api/posyandu/:posyanduId/periode', periodeRoutes);
+// Nested tenant routes - Dilindungi otentikasi JWT dan isolasi tenant (anti-IDOR)
+app.use('/api/posyandu/:posyanduId/balita', authenticate, requireTenantAccess, balitaRoutes);
+app.use('/api/posyandu/:posyanduId/lansia', authenticate, requireTenantAccess, lansiaRoutes);
+app.use('/api/posyandu/:posyanduId/notifications', authenticate, requireTenantAccess, notificationRoutes);
+app.use('/api/posyandu/:posyanduId/periode', authenticate, requireTenantAccess, periodeRoutes);
 
 
 // ─────────────────────────────────────────────────────────────

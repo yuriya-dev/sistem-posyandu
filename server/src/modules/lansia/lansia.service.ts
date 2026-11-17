@@ -144,9 +144,15 @@ export const lansiaService = {
       keluhan?: string;
       tindakan?: string;
       petugas?: string;
-    }
+    },
+    posyanduId?: string
   ) {
-    const lansia = await prisma.lansia.findUnique({ where: { id: lansiaId } });
+    const lansia = await prisma.lansia.findFirst({
+      where: {
+        id: lansiaId,
+        ...(posyanduId ? { posyanduId } : {}),
+      },
+    });
     if (!lansia) throw new Error('Lansia tidak ditemukan');
     const periksaDate = new Date(data.tanggalPeriksa);
     const startOfMonth = new Date(Date.UTC(periksaDate.getUTCFullYear(), periksaDate.getUTCMonth(), 1));
@@ -179,16 +185,27 @@ export const lansiaService = {
 
   async updatePemeriksaan(
     id: string,
+    posyanduId: string,
     data: Partial<Parameters<typeof prisma.pemeriksaanLansia.update>[0]['data']>
   ) {
+    // Verifikasi pemeriksaan ini milik posyandu yang benar (cegah IDOR)
+    const existing = await prisma.pemeriksaanLansia.findFirst({
+      where: { id, lansia: { posyanduId } },
+    });
+    if (!existing) throw new Error('Pemeriksaan tidak ditemukan atau akses ditolak');
     const result = await prisma.pemeriksaanLansia.update({ where: { id }, data });
-    cacheService.delByPattern('dashboard:*').catch(() => {});
+    cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
     return result;
   },
 
-  async deletePemeriksaan(id: string) {
+  async deletePemeriksaan(id: string, posyanduId: string) {
+    // Verifikasi pemeriksaan ini milik posyandu yang benar (cegah IDOR)
+    const existing = await prisma.pemeriksaanLansia.findFirst({
+      where: { id, lansia: { posyanduId } },
+    });
+    if (!existing) throw new Error('Pemeriksaan tidak ditemukan atau akses ditolak');
     const result = await prisma.pemeriksaanLansia.delete({ where: { id } });
-    cacheService.delByPattern('dashboard:*').catch(() => {});
+    cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
     return result;
   },
 };

@@ -5,7 +5,7 @@ export const getDashboardSummary = async (req: Request, res: Response, next: Nex
   try {
     const posyanduId = req.params.posyanduId as string;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke posyandu ini' });
       return;
     }
@@ -22,7 +22,7 @@ export const getTrenGizi = async (req: Request, res: Response, next: NextFunctio
     const posyanduId = req.params.posyanduId as string;
     const period = (req.query.period as 'bulanan' | 'tahunan') || 'bulanan';
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke posyandu ini' });
       return;
     }
@@ -39,7 +39,7 @@ export const getDistribusiKehadiran = async (req: Request, res: Response, next: 
     const posyanduId = req.params.posyanduId as string;
     const kategori = (req.query.kategori || req.query.tipe) as string | undefined;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke posyandu ini' });
       return;
     }
@@ -55,7 +55,7 @@ export const getAktivitasKunjungan = async (req: Request, res: Response, next: N
   try {
     const posyanduId = req.params.posyanduId as string;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke posyandu ini' });
       return;
     }

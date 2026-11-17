@@ -284,3 +284,333 @@ export const getPublicPemeriksaanData = async (filter: PublicPemeriksaanFilter) 
 
   return combined;
 };
+
+export interface PublicNikCheckResult {
+  kategori: 'Balita' | 'Lansia';
+  nama: string;
+  nik: string;
+  maskedNik: string;
+  jenisKelamin: 'L' | 'P';
+  tanggalLahir: string;
+  usiaDeskripsi: string;
+  namaIbu?: string;
+  alamat: string;
+  rtRw?: string;
+  posyandu: {
+    id: string;
+    nama: string;
+    desa: string;
+    kecamatan: string;
+    alamat?: string;
+  };
+  ringkasanKesehatan: {
+    statusUtama: string;
+    statusType: 'success' | 'warning' | 'danger' | 'info';
+    perluPerhatian: boolean;
+    pesanEdukasi: string;
+    tanggalPeriksaTerakhir?: string;
+  };
+  pemeriksaanTerakhir?: any;
+  riwayatPemeriksaan: any[];
+}
+
+function normalizeDateStr(val: Date | string): string {
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const y = val.getUTCFullYear();
+    const m = String(val.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(val.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const str = String(val).trim();
+  const matchIso = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (matchIso) {
+    return `${matchIso[1]}-${matchIso[2].padStart(2, '0')}-${matchIso[3].padStart(2, '0')}`;
+  }
+  const matchDmy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (matchDmy) {
+    return `${matchDmy[3]}-${matchDmy[2].padStart(2, '0')}-${matchDmy[1].padStart(2, '0')}`;
+  }
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getUTCFullYear();
+    const m = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return str;
+}
+
+function maskName(name: string): string {
+  if (!name) return '';
+  const parts = name.trim().split(/\s+/);
+  return parts
+    .map((p) => {
+      if (p.length <= 2) return p;
+      return `${p[0]}${'*'.repeat(Math.min(p.length - 1, 4))}`;
+    })
+    .join(' ');
+}
+
+export const getPublicDataByNik = async (nik: string, tanggalLahir?: string): Promise<PublicNikCheckResult | null> => {
+  const cleanNik = nik.trim().replace(/[^0-9]/g, '');
+  if (!cleanNik || cleanNik.length !== 16) {
+    return null;
+  }
+
+  const maskedNik = `${cleanNik.slice(0, 6)}******${cleanNik.slice(-4)}`;
+
+  // 1. Cari data di Balita
+  const balita = await prisma.balita.findFirst({
+    where: { nik: cleanNik },
+    include: {
+      posyandu: {
+        select: { id: true, nama: true, desa: true, kecamatan: true, alamat: true },
+      },
+      pemeriksaans: {
+        orderBy: { tanggalPeriksa: 'desc' },
+      },
+    },
+  });
+
+  if (balita) {
+    if (tanggalLahir && tanggalLahir.trim()) {
+      const inputTgl = normalizeDateStr(tanggalLahir);
+      const balitaTgl = normalizeDateStr(balita.tanggalLahir);
+      // Validasi ketat kecocokan tanggal lahir untuk mencegah enumerasi NIK
+      if (inputTgl !== balitaTgl) {
+        return null;
+      }
+    }
+
+    const lahir = new Date(balita.tanggalLahir);
+    const now = new Date();
+    const diffMonth =
+      (now.getFullYear() - lahir.getFullYear()) * 12 +
+      (now.getMonth() - lahir.getMonth());
+    const usiaTahun = Math.floor(diffMonth / 12);
+    const sisaBulan = diffMonth % 12;
+    const usiaDeskripsi =
+      usiaTahun > 0
+        ? `${usiaTahun} Tahun ${sisaBulan > 0 ? `${sisaBulan} Bulan` : ''}`.trim()
+        : `${Math.max(0, diffMonth)} Bulan`;
+
+    const riwayat = balita.pemeriksaans.map((p) => {
+      let statusBbUText =
+        p.statusBbU === 'SK' ? 'Sangat Kurang' : p.statusBbU === 'K' ? 'Kurang' : p.statusBbU === 'L' ? 'Lebih' : 'Normal';
+      let statusTbUText =
+        p.statusTbU === 'SP'
+          ? 'Sangat Pendek (Stunting)'
+          : p.statusTbU === 'P'
+          ? 'Pendek'
+          : p.statusTbU === 'T'
+          ? 'Tinggi'
+          : 'Normal';
+      let statusBbTbText =
+        p.statusBbTb === 'SK'
+          ? 'Gizi Buruk'
+          : p.statusBbTb === 'K'
+          ? 'Gizi Kurang'
+          : p.statusBbTb === 'G'
+          ? 'Obesitas'
+          : 'Gizi Baik';
+
+      return {
+        id: p.id,
+        tanggalPeriksa: normalizeDateStr(p.tanggalPeriksa),
+        usiaBulan: p.usiaBulan,
+        beratBadan: Number(p.beratBadan),
+        tinggiBadan: Number(p.tinggiBadan),
+        lingkarKepala: p.lingkarKepala ? Number(p.lingkarKepala) : undefined,
+        lingkarLengan: p.lingkarLengan ? Number(p.lingkarLengan) : undefined,
+        statusBbU: statusBbUText,
+        statusTbU: statusTbUText,
+        statusBbTb: statusBbTbText,
+        vitaminA: p.vitaminA,
+        asiEksklusif: p.asiEksklusif,
+        obatCacing: p.obatCacing,
+        vitB1: p.vitB1,
+        vitB6: p.vitB6,
+        statusImunisasi: p.statusImunisasi || 'Sesuai Usia',
+        petugas: p.petugas || 'Kader Posyandu',
+      };
+    });
+
+    const latest = riwayat[0];
+    let statusUtama = 'Gizi Baik (Normal)';
+    let statusType: 'success' | 'warning' | 'danger' | 'info' = 'success';
+    let perluPerhatian = false;
+    let pesanEdukasi = 'Tumbuh kembang anak berada dalam rentang normal. Tetap jaga pola makan bergizi seimbang dan hadir posyandu rutin setiap bulan.';
+
+    if (latest) {
+      if (latest.statusTbU.includes('Sangat Pendek')) {
+        statusUtama = 'Stunting (Sangat Pendek)';
+        statusType = 'danger';
+        perluPerhatian = true;
+        pesanEdukasi = 'Perlu intervensi gizi dan konsultasi dengan tenaga kesehatan Puskesmas/Posyandu untuk pemantauan tinggi badan intensif.';
+      } else if (latest.statusTbU === 'Pendek') {
+        statusUtama = 'Tinggi Badan Kurang (Pendek)';
+        statusType = 'warning';
+        perluPerhatian = true;
+        pesanEdukasi = 'Perhatikan asupan protein hewani (telur, ikan, daging) dan pantau kenaikan berat serta tinggi badan bulan berikutnya.';
+      } else if (latest.statusBbU === 'Sangat Kurang' || latest.statusBbTb === 'Gizi Buruk') {
+        statusUtama = 'Gizi Sangat Kurang';
+        statusType = 'danger';
+        perluPerhatian = true;
+        pesanEdukasi = 'Berat badan sangat kurang. Segera hubungi kader posyandu atau puskesmas untuk mendapatkan makanan tambahan pemulihan.';
+      } else if (latest.statusBbU === 'Kurang' || latest.statusBbTb === 'Gizi Kurang') {
+        statusUtama = 'Berat Badan Kurang';
+        statusType = 'warning';
+        perluPerhatian = true;
+        pesanEdukasi = 'Tingkatkan frekuensi dan porsi makan bergizi kaya kalori dan protein.';
+      }
+    }
+
+    return {
+      kategori: 'Balita',
+      nama: balita.nama,
+      nik: maskedNik,
+      maskedNik,
+      jenisKelamin: balita.jenisKelamin as 'L' | 'P',
+      tanggalLahir: normalizeDateStr(balita.tanggalLahir),
+      usiaDeskripsi,
+      namaIbu: balita.namaIbu ? maskName(balita.namaIbu) : undefined,
+      alamat: balita.posyandu.desa ? `Desa ${balita.posyandu.desa}, Kec. ${balita.posyandu.kecamatan}` : 'Wilayah Posyandu',
+      posyandu: {
+        id: balita.posyandu.id,
+        nama: balita.posyandu.nama,
+        desa: balita.posyandu.desa,
+        kecamatan: balita.posyandu.kecamatan,
+        alamat: balita.posyandu.alamat,
+      },
+      ringkasanKesehatan: {
+        statusUtama,
+        statusType,
+        perluPerhatian,
+        pesanEdukasi,
+        tanggalPeriksaTerakhir: latest ? latest.tanggalPeriksa : undefined,
+      },
+      pemeriksaanTerakhir: latest || null,
+      riwayatPemeriksaan: riwayat,
+    };
+  }
+
+  // 2. Cari data di Lansia
+  const lansia = await prisma.lansia.findFirst({
+    where: { nik: cleanNik },
+    include: {
+      posyandu: {
+        select: { id: true, nama: true, desa: true, kecamatan: true, alamat: true },
+      },
+      pemeriksaans: {
+        orderBy: { tanggalPeriksa: 'desc' },
+      },
+    },
+  });
+
+  if (lansia) {
+    if (tanggalLahir && tanggalLahir.trim()) {
+      const inputTgl = normalizeDateStr(tanggalLahir);
+      const lansiaTgl = normalizeDateStr(lansia.tanggalLahir);
+      if (inputTgl !== lansiaTgl) {
+        return null;
+      }
+    }
+
+    const lahir = new Date(lansia.tanggalLahir);
+    const now = new Date();
+    const th = Math.floor(
+      (now.getTime() - lahir.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+    );
+    const usiaDeskripsi = `${th} Tahun`;
+
+    const riwayat = lansia.pemeriksaans.map((p) => {
+      const sis = p.tekananDarahSistol;
+      const dia = p.tekananDarahDiastol;
+      const gds = Number(p.gulaDarahSewaktu);
+
+      let statusTensi = 'Normal';
+      if (sis >= 180 || dia >= 110) statusTensi = 'Hipertensi Berat (Tingkat 3)';
+      else if (sis >= 160 || dia >= 100) statusTensi = 'Hipertensi Sedang (Tingkat 2)';
+      else if (sis >= 140 || dia >= 90) statusTensi = 'Hipertensi Ringan (Tingkat 1)';
+      else if (sis >= 120 && sis < 140) statusTensi = 'Pre-Hipertensi';
+
+      let statusGula = 'Normal';
+      if (gds >= 200) statusGula = 'Diabetes (Tinggi)';
+      else if (gds >= 140) statusGula = 'Pre-Diabetes (Waspada)';
+
+      return {
+        id: p.id,
+        tanggalPeriksa: normalizeDateStr(p.tanggalPeriksa),
+        beratBadan: Number(p.beratBadan),
+        tinggiBadan: Number(p.tinggiBadan),
+        tekananDarahSistol: sis,
+        tekananDarahDiastol: dia,
+        tekananDarah: `${sis}/${dia} mmHg`,
+        statusTensi,
+        gulaDarahSewaktu: gds,
+        statusGula,
+        lingkarPerut: p.lingkarPerut ? Number(p.lingkarPerut) : undefined,
+        kolesterol: p.kolesterol ? Number(p.kolesterol) : undefined,
+        asamUrat: p.asamUrat ? Number(p.asamUrat) : undefined,
+        keluhan: p.keluhan || undefined,
+        tindakan: p.tindakan || undefined,
+        petugas: p.petugas || 'Kader Posyandu',
+      };
+    });
+
+    const latest = riwayat[0];
+    let statusUtama = 'Kondisi Kesehatan Stabil';
+    let statusType: 'success' | 'warning' | 'danger' | 'info' = 'success';
+    let perluPerhatian = false;
+    let pesanEdukasi = 'Tekanan darah dan hasil pemeriksaan dalam batas aman. Pertahankan pola makan sehat rendah garam dan olahraga ringan teratur.';
+
+    if (latest) {
+      if (latest.tekananDarahSistol >= 180 || latest.gulaDarahSewaktu >= 250) {
+        statusUtama = 'Kondisi Perlu Rujukan (Tensi / Gula Sangat Tinggi)';
+        statusType = 'danger';
+        perluPerhatian = true;
+        pesanEdukasi = 'Tekanan darah atau gula darah sangat tinggi. Sangat disarankan segera memeriksakan diri ke Puskesmas atau dokter terdekat.';
+      } else if (latest.tekananDarahSistol >= 140 || latest.gulaDarahSewaktu >= 200) {
+        statusUtama = 'Hipertensi / Gula Darah Tinggi';
+        statusType = 'warning';
+        perluPerhatian = true;
+        pesanEdukasi = 'Kurangi konsumsi makanan asin, manis, dan berlemak. Minum obat rutin jika ada resep dokter dan periksa tensi berkala.';
+      } else if (latest.statusTensi === 'Pre-Hipertensi' || latest.statusGula.includes('Pre-Diabetes')) {
+        statusUtama = 'Perlu Pengawasan Rutin';
+        statusType = 'info';
+        pesanEdukasi = 'Tanda-tanda pre-hipertensi atau peningkatan gula darah terdeteksi. Disiplin minum air putih dan cukupi istirahat.';
+      }
+    }
+
+    return {
+      kategori: 'Lansia',
+      nama: lansia.nama,
+      nik: maskedNik,
+      maskedNik,
+      jenisKelamin: lansia.jenisKelamin as 'L' | 'P',
+      tanggalLahir: normalizeDateStr(lansia.tanggalLahir),
+      usiaDeskripsi,
+      alamat: lansia.posyandu.desa ? `Desa ${lansia.posyandu.desa}, Kec. ${lansia.posyandu.kecamatan}` : 'Wilayah Posyandu',
+      rtRw: lansia.rtRw,
+      posyandu: {
+        id: lansia.posyandu.id,
+        nama: lansia.posyandu.nama,
+        desa: lansia.posyandu.desa,
+        kecamatan: lansia.posyandu.kecamatan,
+        alamat: lansia.posyandu.alamat,
+      },
+      ringkasanKesehatan: {
+        statusUtama,
+        statusType,
+        perluPerhatian,
+        pesanEdukasi,
+        tanggalPeriksaTerakhir: latest ? latest.tanggalPeriksa : undefined,
+      },
+      pemeriksaanTerakhir: latest || null,
+      riwayatPemeriksaan: riwayat,
+    };
+  }
+
+  return null;
+};

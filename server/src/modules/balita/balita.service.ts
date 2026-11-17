@@ -118,6 +118,8 @@ export const balitaService = {
   },
 
   async update(id: string, posyanduId: string, data: Parameters<typeof prisma.balita.update>[0]['data']) {
+    const balita = await prisma.balita.findFirst({ where: { id, posyanduId } });
+    if (!balita) throw new Error('Balita tidak ditemukan');
     const result = await prisma.balita.update({ where: { id }, data });
     cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
     return result;
@@ -156,9 +158,15 @@ export const balitaService = {
       obatCacing?: boolean;
       statusImunisasi?: string;
       petugas?: string;
-    }
+    },
+    posyanduId?: string
   ) {
-    const balita = await prisma.balita.findUnique({ where: { id: balitaId } });
+    const balita = await prisma.balita.findFirst({
+      where: {
+        id: balitaId,
+        ...(posyanduId ? { posyanduId } : {}),
+      },
+    });
     if (!balita) throw new Error('Balita tidak ditemukan');
 
     const usiaBulan = hitungUsiaBulan(balita.tanggalLahir, data.tanggalPeriksa);
@@ -213,16 +221,27 @@ export const balitaService = {
 
   async updatePemeriksaan(
     id: string,
+    posyanduId: string,
     data: Partial<Parameters<typeof prisma.pemeriksaanBalita.update>[0]['data']>
   ) {
+    // Verifikasi pemeriksaan ini milik posyandu yang benar (cegah IDOR)
+    const existing = await prisma.pemeriksaanBalita.findFirst({
+      where: { id, balita: { posyanduId } },
+    });
+    if (!existing) throw new Error('Pemeriksaan tidak ditemukan atau akses ditolak');
     const result = await prisma.pemeriksaanBalita.update({ where: { id }, data });
-    cacheService.delByPattern('dashboard:*').catch(() => {});
+    cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
     return result;
   },
 
-  async deletePemeriksaan(id: string) {
+  async deletePemeriksaan(id: string, posyanduId: string) {
+    // Verifikasi pemeriksaan ini milik posyandu yang benar (cegah IDOR)
+    const existing = await prisma.pemeriksaanBalita.findFirst({
+      where: { id, balita: { posyanduId } },
+    });
+    if (!existing) throw new Error('Pemeriksaan tidak ditemukan atau akses ditolak');
     const result = await prisma.pemeriksaanBalita.delete({ where: { id } });
-    cacheService.delByPattern('dashboard:*').catch(() => {});
+    cacheService.delByPattern(`dashboard:*:${posyanduId}*`).catch(() => {});
     return result;
   },
 };

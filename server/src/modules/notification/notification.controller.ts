@@ -5,7 +5,7 @@ export const getNotifications = async (req: Request, res: Response, next: NextFu
   try {
     const posyanduId = req.params.posyanduId as string;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke posyandu ini' });
       return;
     }
@@ -22,7 +22,7 @@ export const markNotificationsAsRead = async (req: Request, res: Response, next:
     const posyanduId = req.params.posyanduId as string;
     const { notificationIds } = req.body;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke posyandu ini' });
       return;
     }
@@ -39,7 +39,7 @@ export const deleteNotification = async (req: Request, res: Response, next: Next
     const posyanduId = req.params.posyanduId as string;
     const id = req.params.id as string;
 
-    if (req.user?.role !== 'OWNER' && req.user?.posyanduId !== posyanduId) {
+    if (req.user?.posyanduId !== posyanduId) {
       res.status(403).json({ success: false, message: 'Akses ditolak ke posyandu ini' });
       return;
     }

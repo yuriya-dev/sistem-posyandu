@@ -710,6 +710,23 @@ export default function PelayananModule({
       return;
     }
 
+    const now = new Date();
+    const curBulan = now.getMonth() + 1;
+    const curTahun = now.getFullYear();
+    const isPeriodeBulanIniAktif =
+      activePeriode &&
+      activePeriode.status === "AKTIF" &&
+      activePeriode.bulan === curBulan &&
+      activePeriode.tahun === curTahun;
+
+    if (!isPeriodeBulanIniAktif) {
+      toast.error("Periode pelayanan bulan ini belum aktif. Silakan kelola periode pelayanan terlebih dahulu.");
+      if (onOpenPeriodeModal) {
+        onOpenPeriodeModal();
+      }
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       let summaryText = `BB: ${bb}kg, TB: ${tb}cm`;
@@ -1136,16 +1153,6 @@ export default function PelayananModule({
                   {formWarning && (
                     <div className="p-3 bg-yellow-50 text-yellow-700 border border-yellow-100 rounded-lg text-xs font-semibold flex gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0" /> {formWarning}
-                    </div>
-                  )}
-
-                  {selectedPasien.currentPeriodExam && (
-                    <div className="p-3 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-600" />
-                      <span>
-                        Pemeriksaan untuk periode ini sudah tercatat. Menyimpan form akan{" "}
-                        <strong>memperbarui (edit)</strong> data pemeriksaan yang ada.
-                      </span>
                     </div>
                   )}
 

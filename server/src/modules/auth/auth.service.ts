@@ -134,7 +134,7 @@ export const authService = {
     const { emailOrUsername, password } = data;
 
     // Cari berdasarkan email atau username
-    const kader = await prisma.kader.findFirst({
+    let kader = await prisma.kader.findFirst({
       where: {
         OR: [
           { email: emailOrUsername },
@@ -144,7 +144,44 @@ export const authService = {
       include: { posyandu: { select: { id: true, nama: true } } },
     });
 
-    if (!kader || !(await bcrypt.compare(password, kader.password))) {
+    if (!kader) {
+      // Demo Puskesmas account support — hanya aktif jika DEMO_PUSKESMAS_PASSWORD dikonfigurasi di env
+      const demoPuskesmasPassword = process.env.DEMO_PUSKESMAS_PASSWORD;
+      const isDemoLogin =
+        demoPuskesmasPassword &&
+        (emailOrUsername.toLowerCase() === 'puskesmas' || emailOrUsername.toLowerCase() === 'puskesmas@gmail.com') &&
+        password === demoPuskesmasPassword;
+      if (isDemoLogin) {
+        const secret = process.env.JWT_SECRET || 'fallback_secret_posyandu_siip';
+        const token = jwt.sign(
+          {
+            userId: 'puskesmas-demo-id',
+            posyanduId: 'puskesmas-wilayah-id',
+            role: 'PUSKESMAS',
+            nama: 'Petugas Puskesmas Wilayah',
+          },
+          secret,
+          { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any }
+        );
+        return {
+          token,
+          kader: {
+            id: 'puskesmas-demo-id',
+            nama: 'Petugas Puskesmas Wilayah',
+            username: 'puskesmas',
+            email: 'puskesmas@gmail.com',
+            role: 'PUSKESMAS' as any,
+            posyandu: { id: 'puskesmas-wilayah-id', nama: 'Puskesmas Kecamatan' },
+          },
+        };
+      }
+
+      const err = new Error('Email/username atau password salah');
+      (err as any).statusCode = 401;
+      throw err;
+    }
+
+    if (!(await bcrypt.compare(password, kader.password))) {
       const err = new Error('Email/username atau password salah');
       (err as any).statusCode = 401;
       throw err;
@@ -156,11 +193,19 @@ export const authService = {
       throw err;
     }
 
+    const isPuskesmasUser =
+      (kader.role as string) === 'PUSKESMAS' ||
+      kader.username?.toLowerCase() === 'puskesmas' ||
+      kader.email.toLowerCase().startsWith('puskesmas') ||
+      kader.posyandu.nama.toLowerCase().includes('puskesmas');
+
+    const effectiveRole = isPuskesmasUser ? 'PUSKESMAS' : kader.role;
+
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET tidak dikonfigurasi');
 
     const token = jwt.sign(
-      { userId: kader.id, posyanduId: kader.posyanduId, role: kader.role, nama: kader.nama },
+      { userId: kader.id, posyanduId: kader.posyanduId, role: effectiveRole, nama: kader.nama },
       secret,
       { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any }
     );
@@ -172,13 +217,25 @@ export const authService = {
         nama: kader.nama,
         username: kader.username,
         email: kader.email,
-        role: kader.role,
+        role: effectiveRole as any,
         posyandu: kader.posyandu,
       },
     };
   },
 
   async getMe(userId: string) {
+    if (userId === 'puskesmas-demo-id') {
+      return {
+        id: 'puskesmas-demo-id',
+        nama: 'Petugas Puskesmas Wilayah',
+        username: 'puskesmas',
+        email: 'puskesmas@gmail.com',
+        role: 'PUSKESMAS' as any,
+        isActive: true,
+        posyandu: { id: 'puskesmas-wilayah-id', nama: 'Puskesmas Kecamatan', desa: 'Wilayah', kecamatan: 'Kecamatan' },
+      };
+    }
+
     const kader = await prisma.kader.findUnique({
       where: { id: userId },
       select: {
@@ -193,12 +250,23 @@ export const authService = {
     });
 
     if (!kader) {
-      const err = new Error('Kader tidak ditemukan');
+      const err = new Error('Pengguna tidak ditemukan');
       (err as any).statusCode = 404;
       throw err;
     }
 
-    return kader;
+    const isPuskesmasUser =
+      (kader.role as string) === 'PUSKESMAS' ||
+      kader.username?.toLowerCase() === 'puskesmas' ||
+      kader.email.toLowerCase().startsWith('puskesmas') ||
+      kader.posyandu.nama.toLowerCase().includes('puskesmas');
+
+    const effectiveRole = isPuskesmasUser ? 'PUSKESMAS' : kader.role;
+
+    return {
+      ...kader,
+      role: effectiveRole as any,
+    };
   },
 
   async updateProfile(userId: string, data: { nama: string; email: string; username?: string; password?: string; oldPassword?: string }) {

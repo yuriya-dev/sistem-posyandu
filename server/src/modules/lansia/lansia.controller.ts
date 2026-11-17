@@ -146,6 +146,7 @@ export const getAllPemeriksaanLansia = async (req: Request, res: Response, next:
 
 export const createPemeriksaanLansia = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const lansiaId = req.params.lansiaId as string;
     const {
       tanggalPeriksa, beratBadan, tinggiBadan,
@@ -159,20 +160,24 @@ export const createPemeriksaanLansia = async (req: Request, res: Response, next:
       petugasNama = kader?.nama;
     }
 
-    const data = await lansiaService.createPemeriksaan(lansiaId, {
-      tanggalPeriksa: new Date(tanggalPeriksa),
-      beratBadan: Number(beratBadan),
-      tinggiBadan: Number(tinggiBadan),
-      tekananDarahSistol: Number(tekananDarahSistol),
-      tekananDarahDiastol: Number(tekananDarahDiastol),
-      gulaDarahSewaktu: Number(gulaDarahSewaktu),
-      lingkarPerut: Number(lingkarPerut),
-      kolesterol: kolesterol ? Number(kolesterol) : undefined,
-      asamUrat: asamUrat ? Number(asamUrat) : undefined,
-      keluhan,
-      tindakan,
-      petugas: petugasNama || 'Kader Posyandu',
-    });
+    const data = await lansiaService.createPemeriksaan(
+      lansiaId,
+      {
+        tanggalPeriksa: new Date(tanggalPeriksa),
+        beratBadan: Number(beratBadan),
+        tinggiBadan: Number(tinggiBadan),
+        tekananDarahSistol: Number(tekananDarahSistol),
+        tekananDarahDiastol: Number(tekananDarahDiastol),
+        gulaDarahSewaktu: Number(gulaDarahSewaktu),
+        lingkarPerut: Number(lingkarPerut),
+        kolesterol: kolesterol ? Number(kolesterol) : undefined,
+        asamUrat: asamUrat ? Number(asamUrat) : undefined,
+        keluhan,
+        tindakan,
+        petugas: petugasNama || 'Kader Posyandu',
+      },
+      posyanduId
+    );
 
     res.status(201).json({ success: true, message: 'Pemeriksaan lansia berhasil ditambahkan', data });
   } catch (err: unknown) {
@@ -186,26 +191,36 @@ export const createPemeriksaanLansia = async (req: Request, res: Response, next:
 
 export const updatePemeriksaanLansia = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const id = req.params.id as string;
     const { tanggalPeriksa, ...rest } = req.body;
 
-    const data = await lansiaService.updatePemeriksaan(id, {
+    const data = await lansiaService.updatePemeriksaan(id, posyanduId, {
       ...rest,
       ...(tanggalPeriksa && { tanggalPeriksa: new Date(tanggalPeriksa) }),
     });
 
     res.json({ success: true, message: 'Pemeriksaan lansia berhasil diperbarui', data });
-  } catch (err) {
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes('tidak ditemukan') || err.message.includes('akses ditolak'))) {
+      res.status(404).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };
 
 export const deletePemeriksaanLansia = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const posyanduId = req.params.posyanduId as string;
     const id = req.params.id as string;
-    await lansiaService.deletePemeriksaan(id);
+    await lansiaService.deletePemeriksaan(id, posyanduId);
     res.json({ success: true, message: 'Pemeriksaan lansia berhasil dihapus' });
-  } catch (err) {
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes('tidak ditemukan') || err.message.includes('akses ditolak'))) {
+      res.status(404).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };
