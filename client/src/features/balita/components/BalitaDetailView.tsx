@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import BalitaIcon from "@/components/BalitaIcon";
 import Pagination from "@/components/Pagination";
+import Modal from "@/components/Modal";
 import {
   ResponsiveContainer,
   LineChart,
@@ -127,6 +128,7 @@ export default function BalitaDetailView({
   const [pageRiwayat, setPageRiwayat] = useState(1);
   const [pageSizeRiwayat, setPageSizeRiwayat] = useState(5);
   const [chartMode, setChartMode] = useState<"kms" | "tinggi">("kms");
+  const [deletingPemberian, setDeletingPemberian] = useState<string | null>(null);
 
   useEffect(() => {
     setPageRiwayat(1);
@@ -521,7 +523,7 @@ export default function BalitaDetailView({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDeleteMasterPemberian(opt);
+                        setDeletingPemberian(opt);
                       }}
                       className="text-gray-400 hover:text-red-500 text-[11px] ml-1 font-bold cursor-pointer"
                       title={`Hapus opsi ${opt} secara permanen`}
@@ -876,6 +878,47 @@ export default function BalitaDetailView({
           />
         )}
       </div>
+
+      {/* Modal Konfirmasi Hapus Opsi Pemberian */}
+      <Modal
+        isOpen={Boolean(deletingPemberian)}
+        onClose={() => setDeletingPemberian(null)}
+        title="Hapus Opsi Pemberian"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-saas-dark font-medium leading-relaxed">
+            Apakah Anda yakin ingin menghapus opsi pemberian{" "}
+            <strong className="text-trend-dangerText font-bold">
+              &quot;{deletingPemberian}&quot;
+            </strong>
+            ?
+          </p>
+          <p className="text-xs text-saas-muted">
+            Tindakan ini tidak dapat dibatalkan. Opsi ini akan dihapus secara permanen dari daftar pilihan pemberian untuk posyandu ini.
+          </p>
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setDeletingPemberian(null)}
+              className="px-4 py-2 border border-hairline rounded-lg text-xs font-semibold text-saas-dark hover:bg-gray-50 cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (deletingPemberian) {
+                  onDeleteMasterPemberian(deletingPemberian);
+                  setDeletingPemberian(null);
+                }
+              }}
+              className="px-4 py-2 bg-trend-dangerText text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer"
+            >
+              Ya, Hapus Opsi
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

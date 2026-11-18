@@ -19,6 +19,11 @@ export default function PeriodeBanner({
   const isCurrentMonth = activePeriode?.bulan === curBulan && activePeriode?.tahun === curTahun;
   const isPeriodAktif = activePeriode?.status === "AKTIF" && isCurrentMonth;
 
+  // Sembunyikan banner jika periode bulan ini sudah aktif
+  if (isPeriodAktif) {
+    return null;
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
       <div className="flex items-center gap-3.5">
@@ -30,40 +35,18 @@ export default function PeriodeBanner({
             <span className="text-[10px] font-bold tracking-wider uppercase bg-teal-50 text-teal-800 border border-teal-200/80 px-2 py-0.5 rounded-md">
               Periode Pelayanan
             </span>
-            {isPeriodAktif ? (
-              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md">
-                AKTIF (BULAN INI)
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md">
-                PERIODE BULAN INI BELUM DIATUR
-              </span>
-            )}
+            <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md">
+              PERIODE BULAN INI BELUM DIATUR
+            </span>
           </div>
           <h3 className="text-base font-extrabold tracking-tight mt-1 text-gray-900">
-            {isPeriodAktif
-              ? activePeriode.nama
-              : activePeriode
+            {activePeriode
               ? `${activePeriode.nama} (Bukan Bulan Ini)`
               : "Periode Pelayanan Bulan Ini Belum Dibuat"}
           </h3>
-          {isPeriodAktif ? (
-            <p className="text-xs text-gray-600 font-medium mt-0.5">
-              Tanggal Pelaksanaan:{" "}
-              <span className="font-bold text-teal-700">
-                {new Date(activePeriode.tanggal).toLocaleDateString("id-ID", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </span>
-              {activePeriode.catatan ? ` • ${activePeriode.catatan}` : ""}
-            </p>
-          ) : (
-            <p className="text-xs text-amber-700 font-semibold mt-0.5">
-              Silakan kelola periode pelayanan untuk membuat atau mengaktifkan periode bulan ini sebelum memulai pencatatan.
-            </p>
-          )}
+          <p className="text-xs text-amber-700 font-semibold mt-0.5">
+            Silakan kelola periode pelayanan untuk membuat atau mengaktifkan periode bulan ini sebelum memulai pencatatan.
+          </p>
         </div>
       </div>
 

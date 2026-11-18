@@ -394,6 +394,7 @@ export default function BalitaModule({ posyanduId, activePeriode, onNavigateToPe
       delete next[optToDelete];
       return next;
     });
+    toast.success(`Opsi "${optToDelete}" berhasil dihapus.`);
   };
 
   interface FormDraftBalita {

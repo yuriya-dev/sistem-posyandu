@@ -402,6 +402,7 @@ export default function PelayananModule({
       delete next[optToDelete];
       return next;
     });
+    toast.success(`Opsi "${optToDelete}" berhasil dihapus.`);
   };
 
   // Form Fields - Lansia
